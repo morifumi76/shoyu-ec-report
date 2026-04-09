@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>森田醤油醸造元 EC売上レポート</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brown: {
+              50:  '#EFEBE9',
+              100: '#D7CCC8',
+              200: '#BCAAA4',
+              300: '#A1887F',
+              400: '#8D6E63',
+              500: '#795548',
+              600: '#6D4C41',
+              700: '#5D4037',
+              800: '#4E342E',
+              900: '#3E2723',
+            },
+            vermilion: {
+              500: '#C62828',
+              600: '#B71C1C',
+            },
+            cream: {
+              50:  '#FFFDE7',
+              100: '#FFF8E1',
+              200: '#FFF3CD',
+            },
+          },
+          fontFamily: {
+            sans: ['"Hiragino Maru Gothic ProN"', '"Noto Sans JP"', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    /* 棒グラフ用スタイル */
+    #barChart {
+      display: flex;
+      height: 100%;
+      position: relative;
+      z-index: 1;
+      gap: 2px;
+    }
+    #xAxisLabels {
+      display: flex;
+      gap: 2px;
+      margin-top: 4px;
+      height: 16px;
+    }
+    .chart-grid-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: #EDE0D4;
+    }
+    /* スクロールバー */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #FFF8E1; }
+    ::-webkit-scrollbar-thumb { background: #BCAAA4; border-radius: 3px; }
+    /* モーション軽減設定（アクセシビリティ） */
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+    /* スクリーンリーダー専用テキスト */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+  </style>
+</head>
+<body class="bg-cream-100 text-brown-900 min-h-screen">
+
+  <!-- ヘッダー -->
+  <header class="bg-brown-900 text-white shadow-md">
+    <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-y-2">
+      <div class="flex items-center gap-4">
+        <!-- ロゴ画像 -->
+        <img src="yamamo-rogo.png" alt="ヤマモロゴ" class="h-12 w-auto rounded-lg object-contain shrink-0" style="max-width:80px;">
+        <div>
+          <h1 class="text-xl font-bold leading-tight">森田醤油醸造元</h1>
+          <p class="text-brown-200 text-sm">EC売上レポート</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <p class="text-brown-200 text-xs">対象月</p>
+        <p class="text-lg font-bold">2026年3月</p>
+        <p class="text-brown-300 text-xs">集計日：2026年4月1日</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- サマリカード（4枚） -->
+    <section>
+      <h2 class="text-sm font-bold text-brown-500 mb-3">月次サマリ</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+        <!-- 主役カード：朱色の左ボーダーと大きめフォントで強調 -->
+        <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4 pl-3" style="border-left: 4px solid #C62828;">
+          <p class="text-xs text-brown-400 mb-1">月間売上合計</p>
+          <p class="text-3xl font-bold text-brown-900">¥287,400</p>
+          <p class="text-xs text-vermilion-500 font-medium mt-1">前月比 +12.3%</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4">
+          <p class="text-xs text-brown-400 mb-1">注文件数</p>
+          <p class="text-2xl font-bold text-brown-900">43<span class="text-base font-normal ml-1">件</span></p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4">
+          <p class="text-xs text-brown-400 mb-1">平均単価</p>
+          <p class="text-2xl font-bold text-brown-900">¥6,684</p>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4">
+          <p class="text-xs text-brown-400 mb-1">前月比</p>
+          <p class="text-2xl font-bold text-vermilion-500">+12.3<span class="text-base">%</span></p>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 日別売上推移グラフ -->
+    <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
+      <h2 class="text-sm font-bold text-brown-700 mb-3">日別売上推移（3月）</h2>
+      <!-- 凡例 -->
+      <div style="display:flex; gap:16px; margin-bottom:10px; font-size:11px;">
+        <div style="display:flex; align-items:center; gap:4px;">
+          <div style="width:10px; height:10px; background:#795548; border-radius:2px; flex-shrink:0;"></div>
+          <span style="color:#5D4037;">日別売上</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <div style="width:10px; height:10px; background:#F9A825; opacity:0.6; border-radius:2px; flex-shrink:0;"></div>
+          <span style="color:#B8860B;">累積売上</span>
+        </div>
+      </div>
+      <div class="overflow-x-auto" aria-label="2026年3月 日別・累積売上グラフ">
+        <div style="display:flex; gap:2px; align-items:flex-start; min-width:700px;">
+
+          <!-- 縦書き左Y軸ラベル（下から上に読む） -->
+          <div style="width:14px; height:180px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <span style="display:inline-block; transform:rotate(-90deg); white-space:nowrap; font-size:10px; color:#8D6E63;">日別売上（円）</span>
+          </div>
+
+          <!-- 左Y軸目盛り（JS絶対配置） -->
+          <div id="leftYAxis" style="width:52px; height:180px; position:relative; flex-shrink:0; overflow:visible;"></div>
+
+          <!-- チャートメインエリア -->
+          <div style="flex:1; display:flex; flex-direction:column;">
+            <!-- グラフエリア（棒 + グリッドライン） -->
+            <div style="position:relative; height:180px; border-bottom:1px solid #A1887F;">
+              <div class="chart-grid-line" style="top:0;"></div>
+              <div class="chart-grid-line" style="top:25%;"></div>
+              <div class="chart-grid-line" style="top:50%;"></div>
+              <div class="chart-grid-line" style="top:75%;"></div>
+              <!-- 棒グラフ（JS描画） -->
+              <div id="barChart"></div>
+            </div>
+            <!-- X軸ラベル（JS描画） -->
+            <div id="xAxisLabels"></div>
+          </div>
+
+          <!-- 右Y軸目盛り（JS絶対配置） -->
+          <div id="rightYAxis" style="width:40px; height:180px; position:relative; flex-shrink:0; overflow:visible;"></div>
+
+          <!-- 縦書き右Y軸ラベル（上から下に読む） -->
+          <div style="width:14px; height:180px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <span style="display:inline-block; transform:rotate(90deg); white-space:nowrap; font-size:10px; color:#B8860B;">累積売上（円）</span>
+          </div>
+
+        </div>
+      </div>
+      <p class="text-xs text-brown-400 mt-2">濃茶の棒が各日の売上（左軸）、背景のアンバー色が月間累積売上（右軸）です。各棒にカーソルを合わせると金額が表示されます。</p>
+    </section>
+
+    <!-- 商品別売上ランキング -->
+    <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
+      <h2 class="text-sm font-bold text-brown-700 mb-3">商品別売上ランキング</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <caption class="sr-only">商品別売上ランキング（2026年3月）</caption>
+          <thead>
+            <tr class="bg-brown-50 text-brown-500 text-xs font-semibold">
+              <th scope="col" class="px-3 py-2 text-center w-10">順位</th>
+              <th scope="col" class="px-3 py-2 text-left">商品名</th>
+              <th scope="col" class="px-3 py-2 text-right">販売数</th>
+              <th scope="col" class="px-3 py-2 text-right">売上金額</th>
+              <th scope="col" class="px-3 py-2 text-right">構成比</th>
+              <th scope="col" class="px-3 py-2 text-left w-32">比率グラフ</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brown-50">
+            <!-- 1位 -->
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-yellow-400 text-white text-xs font-bold">1</span></td>
+              <td class="px-3 py-3 font-medium">ギフトセット1L3本</td>
+              <td class="px-3 py-3 text-right">8</td>
+              <td class="px-3 py-3 text-right font-medium">¥52,800</td>
+              <td class="px-3 py-3 text-right text-vermilion-500 font-bold">18.4%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-vermilion-500 rounded" style="width:84%"></div></div></td>
+            </tr>
+            <!-- 2位 -->
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brown-200 text-brown-700 text-xs font-bold">2</span></td>
+              <td class="px-3 py-3 font-medium">ギフトセットTSUBASA</td>
+              <td class="px-3 py-3 text-right">6</td>
+              <td class="px-3 py-3 text-right font-medium">¥43,200</td>
+              <td class="px-3 py-3 text-right text-brown-700 font-bold">15.0%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-500 rounded" style="width:68%"></div></div></td>
+            </tr>
+            <!-- 3位 -->
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center"><span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-600 text-white text-xs font-bold">3</span></td>
+              <td class="px-3 py-3 font-medium">紫（濃口醤油）</td>
+              <td class="px-3 py-3 text-right">12</td>
+              <td class="px-3 py-3 text-right font-medium">¥38,400</td>
+              <td class="px-3 py-3 text-right text-brown-700 font-bold">13.4%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-400 rounded" style="width:61%"></div></div></td>
+            </tr>
+            <!-- 4位以下 -->
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">4</td>
+              <td class="px-3 py-3">丸大豆醤油</td>
+              <td class="px-3 py-3 text-right">9</td>
+              <td class="px-3 py-3 text-right">¥28,800</td>
+              <td class="px-3 py-3 text-right text-brown-500">10.0%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-300 rounded" style="width:46%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">5</td>
+              <td class="px-3 py-3">さしみ醤油</td>
+              <td class="px-3 py-3 text-right">7</td>
+              <td class="px-3 py-3 text-right">¥22,400</td>
+              <td class="px-3 py-3 text-right text-brown-500">7.8%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-300 rounded" style="width:36%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">6</td>
+              <td class="px-3 py-3">米味噌</td>
+              <td class="px-3 py-3 text-right">6</td>
+              <td class="px-3 py-3 text-right">¥19,200</td>
+              <td class="px-3 py-3 text-right text-brown-500">6.7%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:31%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">7</td>
+              <td class="px-3 py-3">たまごかけ醤油</td>
+              <td class="px-3 py-3 text-right">8</td>
+              <td class="px-3 py-3 text-right">¥18,400</td>
+              <td class="px-3 py-3 text-right text-brown-500">6.4%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:29%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">8</td>
+              <td class="px-3 py-3">本醸造醤油</td>
+              <td class="px-3 py-3 text-right">5</td>
+              <td class="px-3 py-3 text-right">¥16,000</td>
+              <td class="px-3 py-3 text-right text-brown-500">5.6%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:26%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">9</td>
+              <td class="px-3 py-3">合わせ味噌</td>
+              <td class="px-3 py-3 text-right">5</td>
+              <td class="px-3 py-3 text-right">¥15,500</td>
+              <td class="px-3 py-3 text-right text-brown-500">5.4%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:25%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">10</td>
+              <td class="px-3 py-3">焼肉のタレ</td>
+              <td class="px-3 py-3 text-right">6</td>
+              <td class="px-3 py-3 text-right">¥13,200</td>
+              <td class="px-3 py-3 text-right text-brown-500">4.6%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:21%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">11</td>
+              <td class="px-3 py-3">淡口醤油</td>
+              <td class="px-3 py-3 text-right">5</td>
+              <td class="px-3 py-3 text-right">¥15,000</td>
+              <td class="px-3 py-3 text-right text-brown-500">5.2%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:24%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">12</td>
+              <td class="px-3 py-3">純正醤油</td>
+              <td class="px-3 py-3 text-right">4</td>
+              <td class="px-3 py-3 text-right">¥12,800</td>
+              <td class="px-3 py-3 text-right text-brown-500">4.5%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:20%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">13</td>
+              <td class="px-3 py-3">ぶっかけうどん</td>
+              <td class="px-3 py-3 text-right">5</td>
+              <td class="px-3 py-3 text-right">¥11,500</td>
+              <td class="px-3 py-3 text-right text-brown-500">4.0%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:18%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">14</td>
+              <td class="px-3 py-3">麦味噌</td>
+              <td class="px-3 py-3 text-right">4</td>
+              <td class="px-3 py-3 text-right">¥10,700</td>
+              <td class="px-3 py-3 text-right text-brown-500">3.7%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:17%"></div></div></td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-center text-brown-400 text-xs font-medium">15</td>
+              <td class="px-3 py-3">塩麹</td>
+              <td class="px-3 py-3 text-right">4</td>
+              <td class="px-3 py-3 text-right">¥9,500</td>
+              <td class="px-3 py-3 text-right text-brown-500">3.3%</td>
+              <td class="px-3 py-3"><div class="h-2 bg-brown-100 rounded"><div class="h-2 bg-brown-200 rounded" style="width:15%"></div></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 注文詳細一覧 -->
+    <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
+      <h2 class="text-sm font-bold text-brown-700 mb-3">注文詳細一覧（直近10件）</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <caption class="sr-only">注文詳細一覧（直近10件・2026年3月）</caption>
+          <thead>
+            <tr class="bg-brown-50 text-brown-500 text-xs font-semibold">
+              <th scope="col" class="px-3 py-2 text-left">注文日</th>
+              <th scope="col" class="px-3 py-2 text-left">注文番号</th>
+              <th scope="col" class="px-3 py-2 text-left">商品名</th>
+              <th scope="col" class="px-3 py-2 text-right">数量</th>
+              <th scope="col" class="px-3 py-2 text-right">金額</th>
+              <th scope="col" class="px-3 py-2 text-left">配送先</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-brown-50">
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/31</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260331-001</td>
+              <td class="px-3 py-3">ギフトセット1L3本</td>
+              <td class="px-3 py-3 text-right">1</td>
+              <td class="px-3 py-3 text-right font-medium">¥6,600</td>
+              <td class="px-3 py-3 text-brown-500">東京都</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/30</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260330-003</td>
+              <td class="px-3 py-3">ギフトセットTSUBASA</td>
+              <td class="px-3 py-3 text-right">2</td>
+              <td class="px-3 py-3 text-right font-medium">¥14,400</td>
+              <td class="px-3 py-3 text-brown-500">大阪府</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/29</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260329-002</td>
+              <td class="px-3 py-3">紫（濃口醤油）</td>
+              <td class="px-3 py-3 text-right">3</td>
+              <td class="px-3 py-3 text-right font-medium">¥9,600</td>
+              <td class="px-3 py-3 text-brown-500">愛知県</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/28</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260328-004</td>
+              <td class="px-3 py-3">丸大豆醤油</td>
+              <td class="px-3 py-3 text-right">2</td>
+              <td class="px-3 py-3 text-right font-medium">¥6,400</td>
+              <td class="px-3 py-3 text-brown-500">神奈川県</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/27</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260327-001</td>
+              <td class="px-3 py-3">さしみ醤油</td>
+              <td class="px-3 py-3 text-right">2</td>
+              <td class="px-3 py-3 text-right font-medium">¥6,400</td>
+              <td class="px-3 py-3 text-brown-500">岡山県</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/26</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260326-002</td>
+              <td class="px-3 py-3">米味噌</td>
+              <td class="px-3 py-3 text-right">1</td>
+              <td class="px-3 py-3 text-right font-medium">¥3,200</td>
+              <td class="px-3 py-3 text-brown-500">北海道</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/25</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260325-005</td>
+              <td class="px-3 py-3">たまごかけ醤油</td>
+              <td class="px-3 py-3 text-right">2</td>
+              <td class="px-3 py-3 text-right font-medium">¥4,600</td>
+              <td class="px-3 py-3 text-brown-500">福岡県</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/24</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260324-003</td>
+              <td class="px-3 py-3">ギフトセット1L3本</td>
+              <td class="px-3 py-3 text-right">1</td>
+              <td class="px-3 py-3 text-right font-medium">¥6,600</td>
+              <td class="px-3 py-3 text-brown-500">京都府</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/23</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260323-002</td>
+              <td class="px-3 py-3">焼肉のタレ</td>
+              <td class="px-3 py-3 text-right">3</td>
+              <td class="px-3 py-3 text-right font-medium">¥6,600</td>
+              <td class="px-3 py-3 text-brown-500">愛知県</td>
+            </tr>
+            <tr class="hover:bg-cream-50">
+              <td class="px-3 py-3 text-brown-500">3/22</td>
+              <td class="px-3 py-3 text-brown-400 font-mono text-xs">#BS-20260322-001</td>
+              <td class="px-3 py-3">本醸造醤油</td>
+              <td class="px-3 py-3 text-right">2</td>
+              <td class="px-3 py-3 text-right font-medium">¥6,400</td>
+              <td class="px-3 py-3 text-brown-500">静岡県</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- AIによる分析コメント -->
+    <section class="bg-brown-900 text-cream-100 rounded-xl shadow-sm p-5">
+      <div class="flex items-start gap-3">
+        <div class="shrink-0 w-8 h-8 bg-vermilion-500 rounded-full flex items-center justify-center text-xs font-bold text-white mt-0.5">AI</div>
+        <div>
+          <h2 class="text-sm font-bold text-cream-200 mb-2">AI 分析コメント</h2>
+          <p class="text-sm text-brown-100 leading-relaxed">
+            3月は前月比+12.3%と好調な結果となりました。ギフトセット2種が売上の33%を占めており、年度末需要や引越し・転勤シーズンに伴う贈答需要が大きく貢献していると考えられます。また、たまごかけ醤油・焼肉のタレなどの調理用途商品も安定した需要を維持しており、リピート購入層の拡大が見込まれます。4月以降はSNSでのレシピ提案や、母の日ギフト向けセットの早期訴求が売上増に有効と思われます。
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- フッター -->
+  <footer class="max-w-5xl mx-auto px-4 py-4 text-center text-xs text-brown-400 mt-2 border-t border-brown-100">
+    森田醤油醸造元 EC売上レポート ・ 自動生成 by shoyu-ec-report ・ 2026年4月1日生成
+  </footer>
+
+  <!-- 棒グラフ描画スクリプト -->
+  <script>
+    // 3月（31日分）のダミー売上データ（単位：円）
+    const dailySales = [
+       4200,  8800,  3200, 12400,  6600,
+      15200,  9800,  4400,  7200, 11000,
+       5800, 13600,  8200,  6000,  9400,
+      18200,  7600,  4800, 11400,  8000,
+      14800,  6200,  9000,  5400, 12800,
+      16400,  7000,  8600, 10200,  6800,
+      11200
+    ];
+
+    // 累積売上データを計算
+    const cumulativeSales = dailySales.reduce((acc, val) => {
+      acc.push((acc.length > 0 ? acc[acc.length - 1] : 0) + val);
+      return acc;
+    }, []);
+
+    // 左軸（日別）・右軸（累積）のスケール最大値
+    const LEFT_MAX  = 20000;
+    const RIGHT_MAX = 300000;
+    const showLabelDays = new Set([1, 5, 10, 15, 20, 25, 31]);
+
+    // Y軸ラベルを絶対配置で生成するユーティリティ
+    // 端ラベルははみ出し防止のため top:0 / bottom:0 で揃える
+    function buildYAxis(containerId, ticks, color, alignRight) {
+      const container = document.getElementById(containerId);
+      ticks.forEach(({ label, pct }, idx) => {
+        const span = document.createElement('span');
+        const side = alignRight ? 'right:2px;' : 'left:2px;';
+        let posStyle;
+        if (idx === 0) {
+          // 最上段：テキスト上端をコンテナ上端に揃える
+          posStyle = 'top:0; transform:none;';
+        } else if (idx === ticks.length - 1) {
+          // 最下段：テキスト下端をコンテナ下端に揃える
+          posStyle = 'bottom:0; top:auto; transform:none;';
+        } else {
+          posStyle = `top:${pct}%; transform:translateY(-50%);`;
+        }
+        span.style.cssText = `position:absolute; ${side} ${posStyle} font-size:10px; color:${color}; white-space:nowrap; line-height:1;`;
+        span.textContent = label;
+        container.appendChild(span);
+      });
+    }
+
+    // 左Y軸：日別売上（¥0〜¥20,000）※上が高い値
+    buildYAxis('leftYAxis', [
+      { label: '¥20,000', pct: 0   },
+      { label: '¥15,000', pct: 25  },
+      { label: '¥10,000', pct: 50  },
+      { label: '¥5,000',  pct: 75  },
+      { label: '¥0',      pct: 100 },
+    ], '#A1887F', true);
+
+    // 右Y軸：累積売上（¥0〜¥30万）※上が高い値
+    buildYAxis('rightYAxis', [
+      { label: '30万',   pct: 0   },
+      { label: '22.5万', pct: 25  },
+      { label: '15万',   pct: 50  },
+      { label: '7.5万',  pct: 75  },
+      { label: '0',      pct: 100 },
+    ], '#B8860B', false);
+
+    // 棒グラフを描画
+    const chart       = document.getElementById('barChart');
+    const xAxisLabels = document.getElementById('xAxisLabels');
+
+    dailySales.forEach((val, i) => {
+      const day           = i + 1;
+      const dailyPct      = Math.min((val / LEFT_MAX) * 100, 100);
+      const cumulativePct = Math.min((cumulativeSales[i] / RIGHT_MAX) * 100, 100);
+
+      // バーグループ（1日分）
+      const group = document.createElement('div');
+      group.style.cssText = 'flex:1; height:100%; position:relative; min-width:0;';
+
+      // 累積棒（背景・アンバー色）
+      const cumBar = document.createElement('div');
+      cumBar.style.cssText = `position:absolute; bottom:0; left:0; right:0; height:${cumulativePct}%; background:#F9A825; opacity:0.35; border-radius:2px 2px 0 0; min-height:2px;`;
+      cumBar.title = `${day}日 累積: ¥${cumulativeSales[i].toLocaleString()}`;
+
+      // 日別棒（前景・ブラウン）
+      const dailyBar = document.createElement('div');
+      dailyBar.style.cssText = `position:absolute; bottom:0; left:20%; right:20%; height:${dailyPct}%; background:#795548; border-radius:2px 2px 0 0; min-height:2px; transition:background 0.2s; cursor:pointer;`;
+      dailyBar.title = `${day}日: ¥${val.toLocaleString()}`;
+      dailyBar.onmouseenter = () => { dailyBar.style.background = '#C62828'; };
+      dailyBar.onmouseleave = () => { dailyBar.style.background = '#795548'; };
+
+      group.appendChild(cumBar);
+      group.appendChild(dailyBar);
+      chart.appendChild(group);
+
+      // X軸ラベル（指定日のみ表示）
+      const lbl = document.createElement('div');
+      lbl.style.cssText = 'flex:1; font-size:10px; color:#8D6E63; text-align:center; overflow:visible; min-width:0;';
+      lbl.textContent = showLabelDays.has(day) ? String(day) : '';
+      xAxisLabels.appendChild(lbl);
+    });
+  </script>
+
+</body>
+</html>
