@@ -1,0 +1,21 @@
+{
+  "date": "2026-04-26",
+  "fetchedAt": "2026-05-03T05:36:16+09:00",
+  "orderCount": 1,
+  "totalSales": 7170,
+  "orders": [
+    {
+      "orderId": "4918CD52F04F8FFA",
+      "orderedAt": "2026-04-26T09:27:47+09:00",
+      "totalAmount": 7170,
+      "shippingArea": "岡山県",
+      "items": [
+        {
+          "name": "混合醸造しょうゆ｜濃口醤油（紫：むらさき）｜ペットボトル 1.8ℓ",
+          "quantity": 6,
+          "unitPrice": 940
+        }
+      ]
+    }
+  ]
+}
