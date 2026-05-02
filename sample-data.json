@@ -1,1 +1,84 @@
-{}
+{
+  "month": "2026-03",
+  "monthLabel": "2026年3月",
+  "generatedAt": "2026-04-01",
+
+  "summary": {
+    "totalSales": 284200,
+    "orderCount": 43,
+    "averageOrderValue": 6609,
+    "monthOverMonthPct": 12.3
+  },
+
+  "dailySales": [
+    { "day": 1,  "sales": 4200 },
+    { "day": 2,  "sales": 8800 },
+    { "day": 3,  "sales": 3200 },
+    { "day": 4,  "sales": 12400 },
+    { "day": 5,  "sales": 6600 },
+    { "day": 6,  "sales": 15200 },
+    { "day": 7,  "sales": 9800 },
+    { "day": 8,  "sales": 4400 },
+    { "day": 9,  "sales": 7200 },
+    { "day": 10, "sales": 11000 },
+    { "day": 11, "sales": 5800 },
+    { "day": 12, "sales": 13600 },
+    { "day": 13, "sales": 8200 },
+    { "day": 14, "sales": 6000 },
+    { "day": 15, "sales": 9400 },
+    { "day": 16, "sales": 18200 },
+    { "day": 17, "sales": 7600 },
+    { "day": 18, "sales": 4800 },
+    { "day": 19, "sales": 11400 },
+    { "day": 20, "sales": 8000 },
+    { "day": 21, "sales": 14800 },
+    { "day": 22, "sales": 6200 },
+    { "day": 23, "sales": 9000 },
+    { "day": 24, "sales": 5400 },
+    { "day": 25, "sales": 12800 },
+    { "day": 26, "sales": 16400 },
+    { "day": 27, "sales": 7000 },
+    { "day": 28, "sales": 8600 },
+    { "day": 29, "sales": 10200 },
+    { "day": 30, "sales": 6800 },
+    { "day": 31, "sales": 11200 }
+  ],
+
+  "chartScale": {
+    "leftMax": 25000,
+    "rightMax": 350000
+  },
+
+  "productRanking": [
+    { "rank": 1,  "name": "ギフトセット1L3本",     "quantity": 8,  "sales": 52800, "sharePct": 18.6 },
+    { "rank": 2,  "name": "ギフトセットTSUBASA",   "quantity": 6,  "sales": 43200, "sharePct": 15.2 },
+    { "rank": 3,  "name": "紫（濃口醤油）",         "quantity": 12, "sales": 38400, "sharePct": 13.5 },
+    { "rank": 4,  "name": "丸大豆醤油",             "quantity": 9,  "sales": 28800, "sharePct": 10.1 },
+    { "rank": 5,  "name": "さしみ醤油",             "quantity": 7,  "sales": 22400, "sharePct": 7.9 },
+    { "rank": 6,  "name": "米味噌",                 "quantity": 6,  "sales": 19200, "sharePct": 6.8 },
+    { "rank": 7,  "name": "たまごかけ醤油",         "quantity": 8,  "sales": 18400, "sharePct": 6.5 },
+    { "rank": 8,  "name": "本醸造醤油",             "quantity": 5,  "sales": 16000, "sharePct": 5.6 },
+    { "rank": 9,  "name": "合わせ味噌",             "quantity": 5,  "sales": 15500, "sharePct": 5.5 },
+    { "rank": 10, "name": "淡口醤油",               "quantity": 5,  "sales": 15000, "sharePct": 5.3 },
+    { "rank": 11, "name": "焼肉のタレ",             "quantity": 6,  "sales": 13200, "sharePct": 4.6 },
+    { "rank": 12, "name": "純正醤油",               "quantity": 4,  "sales": 12800, "sharePct": 4.5 },
+    { "rank": 13, "name": "ぶっかけうどん",         "quantity": 5,  "sales": 11500, "sharePct": 4.0 },
+    { "rank": 14, "name": "麦味噌",                 "quantity": 4,  "sales": 10700, "sharePct": 3.8 },
+    { "rank": 15, "name": "塩麹",                   "quantity": 4,  "sales": 9500,  "sharePct": 3.3 }
+  ],
+
+  "recentOrders": [
+    { "date": "3/31", "orderNumber": "BS-20260331-001", "productName": "ギフトセット1L3本",   "quantity": 1, "amount": 6600,  "shippingArea": "東京都" },
+    { "date": "3/30", "orderNumber": "BS-20260330-003", "productName": "ギフトセットTSUBASA", "quantity": 2, "amount": 14400, "shippingArea": "大阪府" },
+    { "date": "3/29", "orderNumber": "BS-20260329-002", "productName": "紫（濃口醤油）",       "quantity": 3, "amount": 9600,  "shippingArea": "愛知県" },
+    { "date": "3/28", "orderNumber": "BS-20260328-004", "productName": "丸大豆醤油",           "quantity": 2, "amount": 6400,  "shippingArea": "神奈川県" },
+    { "date": "3/27", "orderNumber": "BS-20260327-001", "productName": "さしみ醤油",           "quantity": 2, "amount": 6400,  "shippingArea": "岡山県" },
+    { "date": "3/26", "orderNumber": "BS-20260326-002", "productName": "米味噌",               "quantity": 1, "amount": 3200,  "shippingArea": "北海道" },
+    { "date": "3/25", "orderNumber": "BS-20260325-005", "productName": "たまごかけ醤油",       "quantity": 2, "amount": 4600,  "shippingArea": "福岡県" },
+    { "date": "3/24", "orderNumber": "BS-20260324-003", "productName": "ギフトセット1L3本",   "quantity": 1, "amount": 6600,  "shippingArea": "京都府" },
+    { "date": "3/23", "orderNumber": "BS-20260323-002", "productName": "焼肉のタレ",           "quantity": 3, "amount": 6600,  "shippingArea": "愛知県" },
+    { "date": "3/22", "orderNumber": "BS-20260322-001", "productName": "本醸造醤油",           "quantity": 2, "amount": 6400,  "shippingArea": "静岡県" }
+  ],
+
+  "aiComment": "3月は売上¥284,200・注文43件で、前月比+12.3%と好調な着地となりました。月間トップはギフトセット1L3本（¥52,800）、続いてTSUBASA・紫の順で、上位3商品が売上の47%を占めています。年度末の贈答需要を確実に捉えられた点が奏功しました。一方で味噌類は合計でも構成比16%にとどまり、定番調味料以外の魅力訴求は引き続きの課題です。4月は新年度・引越しシーズンに合わせて「新生活応援セット」のSNS訴求を強化し、5月の母の日に向けたギフト早期予約キャンペーンを4月中旬から仕込むことをおすすめします。日別では16日（¥18,200）が突出しているため、要因を振り返り再現性を高めましょう。"
+}
