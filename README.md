@@ -1,4 +1,4 @@
-# shoyu-ec-report
+# yamamo-ec-report
 
 森田醤油醸造元のBASE ECショップから売上データを**毎日蓄積**し、**月次レポート（HTML）を毎月1日に自動生成**してGitHub Pagesで公開する自動化ツール。
 
@@ -38,7 +38,7 @@
 ## フォルダ構成
 
 ```
-shoyu-ec-report/
+yamamo-ec-report/
 ├── .github/workflows/
 │   ├── fetch-daily.yml         # [A] 毎日データ取得
 │   └── generate-monthly.yml    # [B] 月次レポート生成
@@ -52,7 +52,7 @@ shoyu-ec-report/
 │   ├── latest.json             # index.htmlが読む最新月次データ
 │   ├── products.json           # 商品マスタキャッシュ
 │   └── archive/YYYY-MM.json    # 過去月次バックアップ
-├── docs/specs/                 # 設計書（v1.1）
+├── docs/specs/                 # 設計書（v1.2）
 ├── index.html                  # レポートUI
 ├── sample-data.json            # 開発用ダミーデータ
 ├── yamamo-rogo.png             # ロゴ画像
@@ -91,7 +91,7 @@ python scripts/oauth_init.py
 
 ## 開発ルール
 
-- 設計書（`docs/specs/shoyu-ec-report｜最終設計書 v1.1.md`）に従って実装する
+- 設計書（`docs/specs/yamamo-ec-report｜最終設計書 v1.2.md`）に従って実装する
 - `main` ブランチへの直pushは禁止。feature ブランチ + PR 方式
 - APIキー等は `.env` で管理し、絶対にコミットしない（`.gitignore` 済）
 - マイルストーン単位で「計画提示 → 確認 → 実装 → 動作確認」のサイクル
@@ -100,10 +100,11 @@ python scripts/oauth_init.py
 
 | # | 内容 | 状態 |
 |---|---|---|
-| M0 | starter/ 整理、設計書v1.1化、README更新、.gitignore作成 | 実施中 |
-| M1 | BASE開発者アプリ登録（手動） | 未着手 |
-| M2 | `oauth_init.py` 実装・ローカル認証 | 未着手 |
-| M3 | `latest.json` キー構造設計＋`fetch_daily.py` 実装 | 未着手 |
+| M0 | starter/ 整理、設計書v1.1化、README更新、.gitignore作成 | ✅ 完了 |
+| M1 | BASE開発者アプリ登録（手動） | ✅ 完了 |
+| M2 | `oauth_init.py` 実装・ローカル認証 | ✅ 完了 |
+| M3a | 設計書v1.2化、`sample-data.json` ダミー投入 | 🚧 進行中 |
+| M3b | `fetch_daily.py` 実装 | 未着手 |
 | M4 | `generate_monthly.py` + `ai_comment.py` 実装 | 未着手 |
 | M5 | `index.html` の軽微リファクタ（fetch化） | 未着手 |
 | M6 | GitHub Actions 両ワークフロー設定 | 未着手 |
