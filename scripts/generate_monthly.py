@@ -29,6 +29,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DAILY_DIR = PROJECT_ROOT / "data" / "daily"
 ARCHIVE_DIR = PROJECT_ROOT / "data" / "archive"
 LATEST_PATH = PROJECT_ROOT / "data" / "latest.json"
+MONTHS_INDEX_PATH = PROJECT_ROOT / "data" / "months.json"
 
 # Y軸スケール自動計算の切り上げ単位（設計書 §4）
 LEFT_AXIS_UNIT = 5000      # 日別売上（円）
@@ -239,6 +240,31 @@ def write_json(path: Path, payload: dict) -> None:
     )
 
 
+def rebuild_months_index() -> dict:
+    """data/archive/ をスキャンして data/months.json を作り直す。
+
+    index.html の月プルダウン用。
+    GitHub Pages（静的サイト）ではディレクトリ列挙ができないため、
+    利用可能な月の一覧を別ファイルとして公開する必要がある。
+    """
+    months: list[str] = []
+    for f in ARCHIVE_DIR.glob("*.json"):
+        name = f.stem  # "2026-04"
+        # YYYY-MM 形式チェック
+        try:
+            datetime.strptime(name, "%Y-%m")
+            months.append(name)
+        except ValueError:
+            continue
+    months.sort()  # 昇順
+    payload = {
+        "available": months,
+        "latest": months[-1] if months else None,
+    }
+    write_json(MONTHS_INDEX_PATH, payload)
+    return payload
+
+
 def main() -> int:
     args = parse_args()
 
@@ -301,11 +327,15 @@ def main() -> int:
     if not args.no_latest:
         write_json(LATEST_PATH, payload)
 
+    # months.json を再構築（index.htmlの月プルダウン用）
+    months_index = rebuild_months_index()
+
     # サマリ表示
     print("\n保存しました:")
     print(f"  {archive_path}")
     if not args.no_latest:
         print(f"  {LATEST_PATH}")
+    print(f"  {MONTHS_INDEX_PATH} （利用可能な月: {len(months_index['available'])}件）")
     print(f"  売上合計: ¥{summary['totalSales']:,}")
     print(f"  注文件数: {summary['orderCount']}")
     print(f"  平均単価: ¥{summary['averageOrderValue']:,}")
