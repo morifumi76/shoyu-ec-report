@@ -1,0 +1,26 @@
+{
+  "date": "2026-04-16",
+  "fetchedAt": "2026-05-03T05:41:43+09:00",
+  "orderCount": 1,
+  "totalSales": 3960,
+  "orders": [
+    {
+      "orderId": "0E583983BCAF0089",
+      "orderedAt": "2026-04-16T10:08:18+09:00",
+      "totalAmount": 3960,
+      "shippingArea": "福岡県",
+      "items": [
+        {
+          "name": "本醸造しょうゆ｜丸大豆（まるだいず）醤油｜ビン 500mℓ",
+          "quantity": 3,
+          "unitPrice": 750
+        },
+        {
+          "name": "みそ｜米味噌｜ビニールパック 1.0Kg",
+          "quantity": 1,
+          "unitPrice": 610
+        }
+      ]
+    }
+  ]
+}

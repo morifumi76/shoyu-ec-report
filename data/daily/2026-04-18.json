@@ -1,0 +1,21 @@
+{
+  "date": "2026-04-18",
+  "fetchedAt": "2026-05-03T05:41:45+09:00",
+  "orderCount": 1,
+  "totalSales": 1370,
+  "orders": [
+    {
+      "orderId": "44DAD408FF191ED0",
+      "orderedAt": "2026-04-18T22:46:17+09:00",
+      "totalAmount": 1370,
+      "shippingArea": "愛媛県",
+      "items": [
+        {
+          "name": "専用しょうゆ｜たまごかけ醤油｜瓶 200mℓ",
+          "quantity": 1,
+          "unitPrice": 500
+        }
+      ]
+    }
+  ]
+}
