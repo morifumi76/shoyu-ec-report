@@ -1,0 +1,85 @@
+name: Daily Order Fetch
+
+# 毎日 09:00 JST に前日分の注文データを取得して data/daily/YYYY-MM-DD.json をコミットする。
+# UTC 基準 0:00 が JST 9:00 に相当（cron: '0 0 * * *'）。
+# 設計書 v1.3 §2 / §6 / §9 M6 に準拠。
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 09:00 JST
+  workflow_dispatch:       # 手動再実行を許可
+
+permissions:
+  contents: write          # data/daily/ への push に必要
+
+concurrency:
+  group: fetch-daily
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .env from secrets
+        env:
+          BASE_CLIENT_ID:     ${{ secrets.BASE_CLIENT_ID }}
+          BASE_CLIENT_SECRET: ${{ secrets.BASE_CLIENT_SECRET }}
+          BASE_REFRESH_TOKEN: ${{ secrets.BASE_REFRESH_TOKEN }}
+        run: |
+          cat > .env << ENVEOF
+          BASE_CLIENT_ID=${BASE_CLIENT_ID}
+          BASE_CLIENT_SECRET=${BASE_CLIENT_SECRET}
+          BASE_REFRESH_TOKEN=${BASE_REFRESH_TOKEN}
+          OAUTH_CALLBACK_PORT=8080
+          ENVEOF
+
+      - name: Fetch yesterday's orders
+        run: python scripts/fetch_daily.py --force
+
+      # BASE は refresh_token をローテーションするため、毎回返ってくる新トークンを
+      # GitHub Secrets に書き戻して次回実行が成功するようにする。
+      # REPO_PAT が未設定の場合はスキップ（warning出力）。
+      - name: Update BASE_REFRESH_TOKEN secret if rotated
+        env:
+          GH_TOKEN:  ${{ secrets.REPO_PAT }}
+          OLD_TOKEN: ${{ secrets.BASE_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::REPO_PAT が未設定です。refresh_token のローテーションに追従できないため、次回実行が失敗する可能性があります。"
+            exit 0
+          fi
+          NEW=$(grep '^BASE_REFRESH_TOKEN=' .env | cut -d= -f2-)
+          if [ -n "$NEW" ] && [ "$NEW" != "$OLD_TOKEN" ]; then
+            echo "::notice::refresh_token がローテーションされました。Secret を更新します。"
+            echo -n "$NEW" | gh secret set BASE_REFRESH_TOKEN --body -
+          else
+            echo "refresh_token は変更なし"
+          fi
+
+      - name: Remove .env (do not commit secrets)
+        if: always()
+        run: rm -f .env
+
+      - name: Commit and push if data changed
+        run: |
+          if [ -n "$(git status --porcelain data/daily/)" ]; then
+            git config user.name  'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add data/daily/
+            git commit -m "data: 日次データ自動取得 ($(TZ=Asia/Tokyo date -d '1 day ago' +%Y-%m-%d))"
+            git push
+          else
+            echo "::notice::データに変更なし、コミットをスキップします"
+          fi
