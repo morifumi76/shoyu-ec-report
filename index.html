@@ -41,42 +41,23 @@
   </script>
   <style>
     /* 棒グラフ用スタイル */
-    #barChart {
-      display: flex;
-      height: 100%;
-      position: relative;
-      z-index: 1;
-      gap: 2px;
-    }
-    #xAxisLabels {
-      display: flex;
-      gap: 2px;
-      margin-top: 4px;
-      height: 16px;
-    }
-    .chart-grid-line {
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: #EDE0D4;
-    }
+    #barChart { display: flex; height: 100%; position: relative; z-index: 1; gap: 2px; }
+    #xAxisLabels { display: flex; gap: 2px; margin-top: 4px; height: 16px; }
+    .chart-grid-line { position: absolute; left: 0; right: 0; height: 1px; background: #EDE0D4; }
     /* スクロールバー */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: #FFF8E1; }
     ::-webkit-scrollbar-thumb { background: #BCAAA4; border-radius: 3px; }
-    /* モーション軽減設定（アクセシビリティ） */
     @media (prefers-reduced-motion: reduce) {
       * { transition: none !important; animation: none !important; }
     }
-    /* スクリーンリーダー専用テキスト */
     .sr-only {
       position: absolute; width: 1px; height: 1px;
       padding: 0; margin: -1px; overflow: hidden;
       clip: rect(0,0,0,0); white-space: nowrap; border: 0;
     }
-    /* 月プルダウン（暗背景に合わせる） */
-    #monthSelect {
+    /* プルダウン（暗背景に合わせる） */
+    #periodSelect {
       background: #5D4037;
       color: #FFF;
       border: 1px solid #8D6E63;
@@ -85,13 +66,54 @@
       font-size: 1rem;
       font-weight: bold;
       cursor: pointer;
-      appearance: none;
-      -webkit-appearance: none;
+      appearance: none; -webkit-appearance: none;
       background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%23FFF'/></svg>");
       background-repeat: no-repeat;
       background-position: right 10px center;
     }
-    #monthSelect:focus { outline: 2px solid #C62828; }
+    #periodSelect:focus { outline: 2px solid #C62828; }
+
+    /* タブ */
+    .tab-button {
+      padding: 10px 28px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: #8D6E63;
+      background: transparent;
+      border: none;
+      border-bottom: 3px solid transparent;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-button:hover { color: #5D4037; }
+    .tab-button.active {
+      color: #C62828;
+      border-bottom-color: #C62828;
+    }
+
+    /* 売上比率（横棒スタック） */
+    .share-bar {
+      display: flex;
+      width: 100%;
+      height: 28px;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #EFEBE9;
+      border: 1px solid #D7CCC8;
+    }
+    .share-segment {
+      height: 100%;
+      transition: opacity 0.15s;
+      cursor: pointer;
+    }
+    .share-segment:hover { opacity: 0.75; }
+    .share-legend-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 2px;
+      margin-right: 6px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body class="bg-cream-100 text-brown-900 min-h-screen">
@@ -107,14 +129,22 @@
         </div>
       </div>
       <div class="text-right">
-        <p class="text-brown-200 text-xs mb-1">対象月</p>
-        <select id="monthSelect" aria-label="表示する月を選択">
+        <p class="text-brown-200 text-xs mb-1" id="periodLabel">対象月</p>
+        <select id="periodSelect" aria-label="表示する期間を選択">
           <option value="">読み込み中…</option>
         </select>
         <p class="text-brown-300 text-xs mt-1">集計日：<span id="generatedAt">—</span></p>
       </div>
     </div>
   </header>
+
+  <!-- タブ（月間 / 年間） -->
+  <div class="bg-white border-b border-brown-100">
+    <div class="max-w-5xl mx-auto px-4 flex gap-2">
+      <button class="tab-button active" id="tabMonthly" type="button" aria-pressed="true">月間</button>
+      <button class="tab-button"        id="tabFiscal"  type="button" aria-pressed="false">年間（年度）</button>
+    </div>
+  </div>
 
   <!-- エラーバナー -->
   <div id="errorBanner" class="hidden max-w-5xl mx-auto mt-4 px-4">
@@ -127,15 +157,15 @@
 
     <!-- サマリカード（4枚） -->
     <section>
-      <h2 class="text-sm font-bold text-brown-500 mb-3">月次サマリ</h2>
+      <h2 class="text-sm font-bold text-brown-500 mb-3" id="summarySectionTitle">月次サマリ</h2>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4 pl-3" style="border-left: 4px solid #C62828;">
-          <p class="text-xs text-brown-400 mb-1">月間売上合計</p>
+          <p class="text-xs text-brown-400 mb-1" id="cardTotalSalesLabel">月間売上合計</p>
           <p class="text-3xl font-bold text-brown-900" id="cardTotalSales">—</p>
           <p class="text-xs text-vermilion-500 font-medium mt-1" id="cardMomSub">前月比 —</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4">
-          <p class="text-xs text-brown-400 mb-1">注文件数</p>
+          <p class="text-xs text-brown-400 mb-1" id="cardOrderCountLabel">注文件数</p>
           <p class="text-2xl font-bold text-brown-900"><span id="cardOrderCount">—</span><span class="text-base font-normal ml-1">件</span></p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4">
@@ -143,31 +173,31 @@
           <p class="text-2xl font-bold text-brown-900" id="cardAvgOrderValue">—</p>
         </div>
         <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4">
-          <p class="text-xs text-brown-400 mb-1">前月比</p>
+          <p class="text-xs text-brown-400 mb-1" id="cardMomLabel">前月比</p>
           <p class="text-2xl font-bold text-vermilion-500" id="cardMom">—</p>
         </div>
       </div>
     </section>
 
-    <!-- 日別売上推移グラフ -->
+    <!-- 売上推移グラフ -->
     <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
-      <h2 class="text-sm font-bold text-brown-700 mb-3" id="dailyChartTitle">日別売上推移</h2>
+      <h2 class="text-sm font-bold text-brown-700 mb-3" id="chartTitle">売上推移</h2>
       <div style="display:flex; gap:16px; margin-bottom:10px; font-size:11px;">
         <div style="display:flex; align-items:center; gap:4px;">
           <div style="width:10px; height:10px; background:#795548; border-radius:2px; flex-shrink:0;"></div>
-          <span style="color:#5D4037;">日別売上</span>
+          <span style="color:#5D4037;" id="chartLegendBar">日別売上</span>
         </div>
         <div style="display:flex; align-items:center; gap:4px;">
           <div style="width:10px; height:10px; background:#F9A825; opacity:0.6; border-radius:2px; flex-shrink:0;"></div>
-          <span style="color:#B8860B;">累積売上</span>
+          <span style="color:#B8860B;" id="chartLegendCum">累積売上</span>
         </div>
       </div>
-      <div class="overflow-x-auto" aria-label="月次の日別・累積売上グラフ">
+      <div class="overflow-x-auto" aria-label="売上推移グラフ">
         <div style="display:flex; gap:2px; align-items:flex-start; min-width:700px;">
           <div style="width:14px; height:180px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            <span style="display:inline-block; transform:rotate(-90deg); white-space:nowrap; font-size:10px; color:#8D6E63;">日別売上（円）</span>
+            <span style="display:inline-block; transform:rotate(-90deg); white-space:nowrap; font-size:10px; color:#8D6E63;" id="chartLeftAxisCaption">売上（円）</span>
           </div>
-          <div id="leftYAxis" style="width:52px; height:180px; position:relative; flex-shrink:0; overflow:visible;"></div>
+          <div id="leftYAxis" style="width:56px; height:180px; position:relative; flex-shrink:0; overflow:visible;"></div>
           <div style="flex:1; display:flex; flex-direction:column;">
             <div style="position:relative; height:180px; border-bottom:1px solid #A1887F;">
               <div class="chart-grid-line" style="top:0;"></div>
@@ -178,13 +208,13 @@
             </div>
             <div id="xAxisLabels"></div>
           </div>
-          <div id="rightYAxis" style="width:40px; height:180px; position:relative; flex-shrink:0; overflow:visible;"></div>
+          <div id="rightYAxis" style="width:48px; height:180px; position:relative; flex-shrink:0; overflow:visible;"></div>
           <div style="width:14px; height:180px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
             <span style="display:inline-block; transform:rotate(90deg); white-space:nowrap; font-size:10px; color:#B8860B;">累積売上（円）</span>
           </div>
         </div>
       </div>
-      <p class="text-xs text-brown-400 mt-2">濃茶の棒が各日の売上（左軸）、背景のアンバー色が月間累積売上（右軸）です。各棒にカーソルを合わせると金額が表示されます。</p>
+      <p class="text-xs text-brown-400 mt-2">濃茶の棒が各期間の売上（左軸）、背景のアンバー色が累積売上（右軸）です。各棒にカーソルを合わせると金額が表示されます。</p>
     </section>
 
     <!-- 商品別売上ランキング -->
@@ -208,8 +238,15 @@
       </div>
     </section>
 
-    <!-- 注文詳細一覧 -->
-    <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
+    <!-- 売上比率（年間ビューのみ表示） -->
+    <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5 hidden" id="salesShareSection">
+      <h2 class="text-sm font-bold text-brown-700 mb-3">商品別 売上構成比（年度合計）</h2>
+      <div class="share-bar mb-4" id="salesShareBar" aria-label="商品別売上構成比の横棒"></div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 text-xs text-brown-700" id="salesShareLegend"></div>
+    </section>
+
+    <!-- 注文詳細一覧（月間ビューのみ表示） -->
+    <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5" id="recentOrdersSection">
       <h2 class="text-sm font-bold text-brown-700 mb-3">注文詳細一覧（直近10件）</h2>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -234,7 +271,7 @@
       <div class="flex items-start gap-3">
         <div class="shrink-0 w-8 h-8 bg-vermilion-500 rounded-full flex items-center justify-center text-xs font-bold text-white mt-0.5">AI</div>
         <div>
-          <h2 class="text-sm font-bold text-cream-200 mb-2">AI 分析コメント</h2>
+          <h2 class="text-sm font-bold text-cream-200 mb-2" id="aiCommentTitle">AI 分析コメント</h2>
           <p class="text-sm text-brown-100 leading-relaxed" id="aiComment">—</p>
         </div>
       </div>
@@ -248,11 +285,12 @@
 
   <script>
     // ====================================================================
-    // データ取得→描画。月プルダウンで過去アーカイブを切り替え可能。
+    // データ取得→描画。月間/年間 タブで月次・年度の表示を切り替える。
     // ====================================================================
 
     const MONTHS_INDEX = 'data/months.json';
-    const archivePath  = (m) => `data/archive/${m}.json`;
+    const monthlyArchivePath = (m) => `data/archive/${m}.json`;
+    const fiscalArchivePath  = (y) => `data/archive/fiscal-${y}.json`;
 
     // 商品ランキング順位バッジの色設定
     const RANK_BADGE = {
@@ -260,18 +298,27 @@
       2: { bg: 'bg-brown-200',   text: 'text-brown-700',   weight: 'font-bold' },
       3: { bg: 'bg-amber-600',   text: 'text-white',       weight: 'font-bold' },
     };
-    // 構成比%テキストの色
     const SHARE_TEXT = {
       1: 'text-vermilion-500 font-bold',
       2: 'text-brown-700 font-bold',
       3: 'text-brown-700 font-bold',
     };
-    // 比率バーの色（順位ごと）
     const BAR_COLOR = {
       1: 'bg-vermilion-500',
       2: 'bg-brown-500',
       3: 'bg-brown-400',
     };
+
+    // 売上構成比チャートの色（順位順）
+    const SHARE_COLORS = [
+      '#C62828', '#5D4037', '#8D6E63', '#A1887F', '#BCAAA4',
+      '#D7CCC8', '#F9A825', '#FFB74D', '#FFCC80', '#FFE0B2',
+    ];
+    const SHARE_COLOR_FALLBACK = '#EFEBE9';
+
+    // アプリ状態
+    let monthsIndex = null;
+    let currentMode = 'monthly';  // 'monthly' | 'fiscal'
 
     // ----- ユーティリティ ----------------------------------------------
 
@@ -282,14 +329,11 @@
     }
 
     function fmtMonthLabel(m) {
-      // "2026-04" → "2026年4月"
       const [y, mo] = m.split('-');
       return `${y}年${parseInt(mo, 10)}月`;
     }
-
     function fmtYen(n)   { return '¥' + (n ?? 0).toLocaleString(); }
     function fmtIsoDate(iso) {
-      // "2026-05-03" → "2026年5月3日"
       const [y, m, d] = iso.split('-');
       return `${y}年${parseInt(m, 10)}月${parseInt(d, 10)}日`;
     }
@@ -301,16 +345,14 @@
       }
       return '¥' + v.toLocaleString();
     }
-
     function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
     function showError(msg) {
-      const banner = document.getElementById('errorBanner');
       document.getElementById('errorDetail').textContent = msg;
-      banner.classList.remove('hidden');
+      document.getElementById('errorBanner').classList.remove('hidden');
     }
-    function hideError() {
-      document.getElementById('errorBanner').classList.add('hidden');
-    }
+    function hideError() { document.getElementById('errorBanner').classList.add('hidden'); }
+    function show(el)   { el.classList.remove('hidden'); }
+    function hide(el)   { el.classList.add('hidden'); }
 
     // ----- Y軸ラベル ----------------------------------------------------
 
@@ -321,7 +363,7 @@
         const span = document.createElement('span');
         const side = alignRight ? 'right:2px;' : 'left:2px;';
         let posStyle;
-        if (idx === 0)                    posStyle = 'top:0; transform:none;';
+        if (idx === 0)                     posStyle = 'top:0; transform:none;';
         else if (idx === ticks.length - 1) posStyle = 'bottom:0; top:auto; transform:none;';
         else                               posStyle = `top:${pct}%; transform:translateY(-50%);`;
         span.style.cssText = `position:absolute; ${side} ${posStyle} font-size:10px; color:${color}; white-space:nowrap; line-height:1;`;
@@ -330,80 +372,92 @@
       });
     }
 
-    // ----- 描画関数 -----------------------------------------------------
+    // ----- 描画関数（共通） ---------------------------------------------
 
-    function renderHeader(data) {
-      document.getElementById('generatedAt').textContent = fmtIsoDate(data.generatedAt);
-      document.getElementById('footerGenAt').textContent = fmtIsoDate(data.generatedAt);
+    function renderHeaderMeta(generatedAt) {
+      document.getElementById('generatedAt').textContent = fmtIsoDate(generatedAt);
+      document.getElementById('footerGenAt').textContent = fmtIsoDate(generatedAt);
     }
 
-    function renderSummary(data) {
+    function renderSummary(data, mode) {
       const s = data.summary || {};
-      document.getElementById('cardTotalSales').textContent     = fmtYen(s.totalSales);
-      document.getElementById('cardOrderCount').textContent     = s.orderCount ?? 0;
-      document.getElementById('cardAvgOrderValue').textContent  = fmtYen(s.averageOrderValue);
 
-      const mom = s.monthOverMonthPct;
-      const momLabel = mom == null ? '—' : `${mom > 0 ? '+' : ''}${mom}%`;
-      document.getElementById('cardMom').textContent = momLabel;
-      document.getElementById('cardMomSub').textContent =
-        mom == null ? '前月比 —' : `前月比 ${mom > 0 ? '+' : ''}${mom}%`;
+      // ラベル
+      document.getElementById('summarySectionTitle').textContent =
+        mode === 'fiscal' ? '年度サマリ' : '月次サマリ';
+      document.getElementById('cardTotalSalesLabel').textContent =
+        mode === 'fiscal' ? '年間売上合計' : '月間売上合計';
+      document.getElementById('cardOrderCountLabel').textContent =
+        mode === 'fiscal' ? '年間注文件数' : '注文件数';
+      document.getElementById('cardMomLabel').textContent =
+        mode === 'fiscal' ? '前年同期比' : '前月比';
+
+      // 値
+      document.getElementById('cardTotalSales').textContent    = fmtYen(s.totalSales);
+      document.getElementById('cardOrderCount').textContent    = s.orderCount ?? 0;
+      document.getElementById('cardAvgOrderValue').textContent = fmtYen(s.averageOrderValue);
+
+      const compare = mode === 'fiscal' ? s.yearOverYearPct : s.monthOverMonthPct;
+      const compareLabel = compare == null ? '—' : `${compare > 0 ? '+' : ''}${compare}%`;
+      document.getElementById('cardMom').textContent = compareLabel;
+      document.getElementById('cardMomSub').textContent = (mode === 'fiscal' ? '前年同期比 ' : '前月比 ') + compareLabel;
     }
 
-    function renderChart(data) {
-      const dailySales = data.dailySales || [];
-      const scale = data.chartScale || { leftMax: 5000, rightMax: 50000 };
-      const monthLabel = data.monthLabel || '';
-      document.getElementById('dailyChartTitle').textContent = `日別売上推移（${monthLabel}）`;
+    /**
+     * 棒グラフ描画（月間=日別 / 年間=月別 で共通利用）
+     * @param items   [{label, value}, ...] 棒の元データ
+     * @param scale   {leftMax, rightMax}
+     * @param title   "日別売上推移（4月）" 等
+     * @param showAllXLabels true=全ラベル表示 / false=主要日のみ
+     */
+    function renderChart(items, scale, title, showAllXLabels) {
+      document.getElementById('chartTitle').textContent = title;
+      document.getElementById('chartLegendBar').textContent = showAllXLabels ? '月別売上' : '日別売上';
 
-      // Y軸
       buildYAxis('leftYAxis', [
-        { label: fmtYen(scale.leftMax),                   pct: 0   },
+        { label: fmtYen(scale.leftMax),                    pct: 0   },
         { label: fmtYen(Math.round(scale.leftMax * 0.75)), pct: 25  },
         { label: fmtYen(Math.round(scale.leftMax * 0.5)),  pct: 50  },
         { label: fmtYen(Math.round(scale.leftMax * 0.25)), pct: 75  },
         { label: '¥0',                                     pct: 100 },
       ], '#A1887F', true);
       buildYAxis('rightYAxis', [
-        { label: fmtRightAxis(scale.rightMax),                   pct: 0   },
+        { label: fmtRightAxis(scale.rightMax),                    pct: 0   },
         { label: fmtRightAxis(Math.round(scale.rightMax * 0.75)), pct: 25  },
         { label: fmtRightAxis(Math.round(scale.rightMax * 0.5)),  pct: 50  },
         { label: fmtRightAxis(Math.round(scale.rightMax * 0.25)), pct: 75  },
         { label: '0',                                             pct: 100 },
       ], '#B8860B', false);
 
-      // 累積データを計算
+      // 累積
       const cumulative = [];
-      dailySales.reduce((acc, d) => {
-        const v = acc + (d.sales || 0);
-        cumulative.push(v);
-        return v;
-      }, 0);
+      items.reduce((acc, it) => { const v = acc + (it.value || 0); cumulative.push(v); return v; }, 0);
 
-      // 棒グラフとX軸
       const chart = document.getElementById('barChart');
       const xAxis = document.getElementById('xAxisLabels');
       clear(chart); clear(xAxis);
 
-      const lastDay = dailySales.length > 0 ? dailySales[dailySales.length - 1].day : 31;
-      const showLabelDays = new Set([1, 5, 10, 15, 20, 25, lastDay]);
+      // 月間モードの主要日（X軸ラベル省略表示用）
+      let sparseSet = null;
+      if (!showAllXLabels) {
+        const lastLabel = items[items.length - 1]?.label;
+        sparseSet = new Set(['1', '5', '10', '15', '20', '25', lastLabel]);
+      }
 
-      dailySales.forEach((d, i) => {
-        const dailyPct = scale.leftMax > 0
-          ? Math.min((d.sales / scale.leftMax) * 100, 100) : 0;
-        const cumPct = scale.rightMax > 0
-          ? Math.min((cumulative[i] / scale.rightMax) * 100, 100) : 0;
+      items.forEach((it, i) => {
+        const dailyPct = scale.leftMax > 0  ? Math.min((it.value / scale.leftMax) * 100, 100)         : 0;
+        const cumPct   = scale.rightMax > 0 ? Math.min((cumulative[i] / scale.rightMax) * 100, 100)   : 0;
 
         const group = document.createElement('div');
         group.style.cssText = 'flex:1; height:100%; position:relative; min-width:0;';
 
         const cumBar = document.createElement('div');
         cumBar.style.cssText = `position:absolute; bottom:0; left:0; right:0; height:${cumPct}%; background:#F9A825; opacity:0.35; border-radius:2px 2px 0 0; min-height:2px;`;
-        cumBar.title = `${d.day}日 累積: ${fmtYen(cumulative[i])}`;
+        cumBar.title = `${it.label} 累積: ${fmtYen(cumulative[i])}`;
 
         const dailyBar = document.createElement('div');
         dailyBar.style.cssText = `position:absolute; bottom:0; left:20%; right:20%; height:${dailyPct}%; background:#795548; border-radius:2px 2px 0 0; min-height:2px; transition:background 0.2s; cursor:pointer;`;
-        dailyBar.title = `${d.day}日: ${fmtYen(d.sales)}`;
+        dailyBar.title = `${it.label}: ${fmtYen(it.value)}`;
         dailyBar.onmouseenter = () => { dailyBar.style.background = '#C62828'; };
         dailyBar.onmouseleave = () => { dailyBar.style.background = '#795548'; };
 
@@ -413,7 +467,7 @@
 
         const lbl = document.createElement('div');
         lbl.style.cssText = 'flex:1; font-size:10px; color:#8D6E63; text-align:center; overflow:visible; min-width:0;';
-        lbl.textContent = showLabelDays.has(d.day) ? String(d.day) : '';
+        lbl.textContent = showAllXLabels ? it.label : (sparseSet.has(it.label) ? it.label : '');
         xAxis.appendChild(lbl);
       });
     }
@@ -425,9 +479,7 @@
       const maxShare = items.length ? Math.max(...items.map(it => it.sharePct)) : 0;
 
       if (items.length === 0) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="6" class="px-3 py-6 text-center text-brown-400">データがありません</td>';
-        tbody.appendChild(tr);
+        tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-brown-400">データがありません</td></tr>';
         return;
       }
 
@@ -435,43 +487,37 @@
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-cream-50';
 
-        // 順位セル
         const rankTd = document.createElement('td');
         rankTd.className = 'px-3 py-3 text-center';
         if (RANK_BADGE[it.rank]) {
-          const badge = RANK_BADGE[it.rank];
-          rankTd.innerHTML = `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${badge.bg} ${badge.text} text-xs ${badge.weight}">${it.rank}</span>`;
+          const b = RANK_BADGE[it.rank];
+          rankTd.innerHTML = `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${b.bg} ${b.text} text-xs ${b.weight}">${it.rank}</span>`;
         } else {
           rankTd.className += ' text-brown-400 text-xs font-medium';
           rankTd.textContent = it.rank;
         }
         tr.appendChild(rankTd);
 
-        // 商品名
         const nameTd = document.createElement('td');
         nameTd.className = it.rank <= 3 ? 'px-3 py-3 font-medium' : 'px-3 py-3';
         nameTd.textContent = it.name;
         tr.appendChild(nameTd);
 
-        // 販売数
         const qtyTd = document.createElement('td');
         qtyTd.className = 'px-3 py-3 text-right';
         qtyTd.textContent = it.quantity;
         tr.appendChild(qtyTd);
 
-        // 売上金額
         const salesTd = document.createElement('td');
         salesTd.className = it.rank <= 3 ? 'px-3 py-3 text-right font-medium' : 'px-3 py-3 text-right';
         salesTd.textContent = fmtYen(it.sales);
         tr.appendChild(salesTd);
 
-        // 構成比
         const shareTd = document.createElement('td');
         shareTd.className = `px-3 py-3 text-right ${SHARE_TEXT[it.rank] || 'text-brown-500'}`;
         shareTd.textContent = `${it.sharePct}%`;
         tr.appendChild(shareTd);
 
-        // 比率バー（最大値=84%幅にスケール）
         const barTd = document.createElement('td');
         barTd.className = 'px-3 py-3';
         const widthPct = maxShare > 0 ? (it.sharePct / maxShare) * 84 : 0;
@@ -483,15 +529,43 @@
       });
     }
 
+    function renderSalesShare(data) {
+      const items = (data.productRanking || []);
+      const bar    = document.getElementById('salesShareBar');
+      const legend = document.getElementById('salesShareLegend');
+      clear(bar); clear(legend);
+
+      if (items.length === 0) {
+        bar.innerHTML = '<div class="text-brown-400 text-xs p-2">データがありません</div>';
+        return;
+      }
+
+      // 棒：構成比 width%、色は順位順
+      items.forEach((p, i) => {
+        const seg = document.createElement('div');
+        seg.className = 'share-segment';
+        seg.style.width = `${p.sharePct}%`;
+        seg.style.background = SHARE_COLORS[i] || SHARE_COLOR_FALLBACK;
+        seg.title = `${p.name}: ${p.sharePct}% (${fmtYen(p.sales)})`;
+        bar.appendChild(seg);
+      });
+
+      // 凡例
+      items.forEach((p, i) => {
+        const li = document.createElement('div');
+        const color = SHARE_COLORS[i] || SHARE_COLOR_FALLBACK;
+        li.innerHTML = `<span class="share-legend-dot" style="background:${color}"></span><span class="font-mono text-brown-400 mr-1">${p.rank}.</span>${p.name}<span class="text-brown-400 ml-1">（${p.sharePct}%）</span>`;
+        legend.appendChild(li);
+      });
+    }
+
     function renderRecentOrders(data) {
       const tbody = document.getElementById('recentOrdersBody');
       clear(tbody);
       const orders = data.recentOrders || [];
 
       if (orders.length === 0) {
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="6" class="px-3 py-6 text-center text-brown-400">データがありません</td>';
-        tbody.appendChild(tr);
+        tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-brown-400">データがありません</td></tr>';
         return;
       }
 
@@ -510,72 +584,136 @@
       });
     }
 
-    function renderAIComment(data) {
+    function renderAIComment(data, mode) {
+      document.getElementById('aiCommentTitle').textContent =
+        mode === 'fiscal' ? 'AI 年間分析コメント' : 'AI 分析コメント';
       const el = document.getElementById('aiComment');
       const c = (data.aiComment || '').trim();
       if (c) {
         el.textContent = c;
         el.classList.remove('italic', 'opacity-70');
       } else {
-        el.textContent = 'AI分析コメントは月次ジョブ後に生成されます。';
+        el.textContent = mode === 'fiscal'
+          ? 'AI年間分析コメントは年次ジョブ後に生成されます。'
+          : 'AI分析コメントは月次ジョブ後に生成されます。';
         el.classList.add('italic', 'opacity-70');
       }
     }
 
-    function render(data) {
+    // ----- 月間ビュー / 年間ビュー描画 ----------------------------------
+
+    function renderMonthlyView(data) {
       hideError();
-      renderHeader(data);
-      renderSummary(data);
-      renderChart(data);
+      renderHeaderMeta(data.generatedAt);
+      renderSummary(data, 'monthly');
+
+      const items = (data.dailySales || []).map(d => ({ label: String(d.day), value: d.sales }));
+      renderChart(items, data.chartScale || { leftMax: 5000, rightMax: 50000 },
+                  `日別売上推移（${data.monthLabel || ''}）`, false);
+
       renderProductRanking(data);
       renderRecentOrders(data);
-      renderAIComment(data);
+      renderAIComment(data, 'monthly');
+
+      // セクション表示制御
+      hide(document.getElementById('salesShareSection'));
+      show(document.getElementById('recentOrdersSection'));
     }
 
-    // ----- 月プルダウン -------------------------------------------------
+    function renderFiscalView(data) {
+      hideError();
+      renderHeaderMeta(data.generatedAt);
+      renderSummary(data, 'fiscal');
 
-    function setupDropdown(monthsIndex) {
-      const sel = document.getElementById('monthSelect');
+      const items = (data.monthlySales || []).map(m => ({ label: m.monthLabel, value: m.sales }));
+      renderChart(items, data.chartScale || { leftMax: 50000, rightMax: 500000 },
+                  `月別売上推移（${data.fiscalLabel || ''}）`, true);
+
+      renderProductRanking(data);
+      renderSalesShare(data);
+      renderAIComment(data, 'fiscal');
+
+      // セクション表示制御
+      show(document.getElementById('salesShareSection'));
+      hide(document.getElementById('recentOrdersSection'));
+    }
+
+    // ----- プルダウン＋タブ制御 -----------------------------------------
+
+    function setupPeriodSelect(mode) {
+      const sel = document.getElementById('periodSelect');
+      const label = document.getElementById('periodLabel');
       clear(sel);
-      const months = [...(monthsIndex.available || [])].reverse(); // 新しい順
-      if (months.length === 0) {
-        const opt = document.createElement('option');
-        opt.textContent = 'データなし';
-        sel.appendChild(opt);
-        sel.disabled = true;
-        return;
+
+      if (mode === 'fiscal') {
+        label.textContent = '対象年度';
+        const fiscals = [...(monthsIndex.fiscalAvailable || [])].reverse(); // 新しい順
+        if (fiscals.length === 0) {
+          sel.appendChild(new Option('データなし', ''));
+          sel.disabled = true;
+          return null;
+        }
+        fiscals.forEach(y => sel.appendChild(new Option(`${y}年度`, String(y))));
+        const def = String(monthsIndex.fiscalLatest ?? fiscals[0]);
+        sel.value = def;
+        sel.disabled = false;
+        return def;
+      } else {
+        label.textContent = '対象月';
+        const months = [...(monthsIndex.available || [])].reverse();
+        if (months.length === 0) {
+          sel.appendChild(new Option('データなし', ''));
+          sel.disabled = true;
+          return null;
+        }
+        months.forEach(m => sel.appendChild(new Option(fmtMonthLabel(m), m)));
+        const def = monthsIndex.latest || months[0];
+        sel.value = def;
+        sel.disabled = false;
+        return def;
       }
-      months.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.textContent = fmtMonthLabel(m);
-        sel.appendChild(opt);
-      });
-      sel.value = monthsIndex.latest || months[0];
-      sel.addEventListener('change', () => loadAndRender(sel.value));
     }
 
-    async function loadAndRender(month) {
+    async function loadAndRender(mode, key) {
       try {
-        const data = await fetchJSON(archivePath(month));
-        render(data);
+        const path = mode === 'fiscal' ? fiscalArchivePath(key) : monthlyArchivePath(key);
+        const data = await fetchJSON(path);
+        if (mode === 'fiscal') renderFiscalView(data);
+        else                   renderMonthlyView(data);
       } catch (e) {
         showError(e.message);
       }
     }
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('tabMonthly').classList.toggle('active', mode === 'monthly');
+      document.getElementById('tabMonthly').setAttribute('aria-pressed', String(mode === 'monthly'));
+      document.getElementById('tabFiscal').classList.toggle('active',  mode === 'fiscal');
+      document.getElementById('tabFiscal').setAttribute('aria-pressed', String(mode === 'fiscal'));
+
+      const def = setupPeriodSelect(mode);
+      if (def) loadAndRender(mode, def);
+    }
+
+    // ----- 初期化 -------------------------------------------------------
 
     async function init() {
       try {
-        const monthsIndex = await fetchJSON(MONTHS_INDEX);
-        setupDropdown(monthsIndex);
-        if (monthsIndex.latest) {
-          await loadAndRender(monthsIndex.latest);
-        } else {
-          showError('利用可能な月がありません。');
-        }
+        monthsIndex = await fetchJSON(MONTHS_INDEX);
       } catch (e) {
         showError(e.message);
+        return;
       }
+      // タブクリック
+      document.getElementById('tabMonthly').addEventListener('click', () => setMode('monthly'));
+      document.getElementById('tabFiscal').addEventListener('click',  () => setMode('fiscal'));
+      // プルダウン変更
+      document.getElementById('periodSelect').addEventListener('change', (e) => {
+        if (e.target.value) loadAndRender(currentMode, e.target.value);
+      });
+      // デフォルトは月間
+      setMode('monthly');
     }
 
     init();
