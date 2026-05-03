@@ -1,0 +1,26 @@
+{
+  "date": "2026-04-07",
+  "fetchedAt": "2026-05-03T05:41:39+09:00",
+  "orderCount": 1,
+  "totalSales": 3240,
+  "orders": [
+    {
+      "orderId": "F643857F85FEA598",
+      "orderedAt": "2026-04-07T01:59:46+09:00",
+      "totalAmount": 3240,
+      "shippingArea": "東京都",
+      "items": [
+        {
+          "name": "本醸造しょうゆ｜丸大豆（まるだいず）醤油｜ビン 500mℓ",
+          "quantity": 1,
+          "unitPrice": 750
+        },
+        {
+          "name": "混合醸造しょうゆ｜濃口醤油（紫：むらさき）｜ペットボトル 1.0ℓ",
+          "quantity": 2,
+          "unitPrice": 590
+        }
+      ]
+    }
+  ]
+}

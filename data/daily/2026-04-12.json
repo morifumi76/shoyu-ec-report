@@ -1,0 +1,39 @@
+{
+  "date": "2026-04-12",
+  "fetchedAt": "2026-05-03T05:41:41+09:00",
+  "orderCount": 2,
+  "totalSales": 4210,
+  "orders": [
+    {
+      "orderId": "DD1367602F55427C",
+      "orderedAt": "2026-04-12T21:38:48+09:00",
+      "totalAmount": 2340,
+      "shippingArea": "東京都",
+      "items": [
+        {
+          "name": "混合醸造しょうゆ｜濃口醤油（紫：むらさき）｜ペットボトル 1.0ℓ",
+          "quantity": 1,
+          "unitPrice": 590
+        },
+        {
+          "name": "本醸造しょうゆ｜純正（じゅんせい）醤油｜ペットボトル 1.0ℓ",
+          "quantity": 1,
+          "unitPrice": 650
+        }
+      ]
+    },
+    {
+      "orderId": "41A3D14A799DF971",
+      "orderedAt": "2026-04-12T05:04:10+09:00",
+      "totalAmount": 1870,
+      "shippingArea": "山口県",
+      "items": [
+        {
+          "name": "専用しょうゆ｜たまごかけ醤油｜瓶 200mℓ",
+          "quantity": 2,
+          "unitPrice": 500
+        }
+      ]
+    }
+  ]
+}

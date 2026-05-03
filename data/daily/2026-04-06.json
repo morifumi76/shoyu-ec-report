@@ -1,0 +1,26 @@
+{
+  "date": "2026-04-06",
+  "fetchedAt": "2026-05-03T05:41:38+09:00",
+  "orderCount": 1,
+  "totalSales": 2010,
+  "orders": [
+    {
+      "orderId": "BE6A28DDA79846A9",
+      "orderedAt": "2026-04-06T07:32:08+09:00",
+      "totalAmount": 2010,
+      "shippingArea": "広島県",
+      "items": [
+        {
+          "name": "混合醸造しょうゆ｜濃口醤油（紫：むらさき）｜ペットボトル 1.0ℓ",
+          "quantity": 1,
+          "unitPrice": 590
+        },
+        {
+          "name": "混合醸造しょうゆ｜淡口（うすくち）醤油｜ペットボトル 1.0ℓ",
+          "quantity": 1,
+          "unitPrice": 550
+        }
+      ]
+    }
+  ]
+}
