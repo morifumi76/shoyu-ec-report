@@ -2,5 +2,9 @@
   "available": [
     "2026-04"
   ],
-  "latest": "2026-04"
+  "latest": "2026-04",
+  "fiscalAvailable": [
+    2026
+  ],
+  "fiscalLatest": 2026
 }

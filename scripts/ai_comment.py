@@ -80,8 +80,63 @@ def build_prompt(payload: dict) -> str:
     )
 
 
-def generate_comment(payload: dict) -> str:
-    """GitHub Models API を叩いて AIコメントを返す。"""
+def build_fiscal_prompt(payload: dict) -> str:
+    """年次（年度）コメント用プロンプト。設計書 §5「年次コメントの立て付け」に準拠。"""
+    summary = payload.get("summary", {})
+    total_sales = summary.get("totalSales", 0)
+    order_count = summary.get("orderCount", 0)
+    avg = summary.get("averageOrderValue", 0)
+    yoy = summary.get("yearOverYearPct")
+    yoy_text = f"{yoy}%" if yoy is not None else "—（前年データなし・初年度）"
+
+    monthly = payload.get("monthlySales", [])
+    monthly_text = "\n".join(
+        f"  {m['monthLabel']}: ¥{m['sales']:,}" for m in monthly
+    ) if monthly else "  （データなし）"
+
+    top5 = payload.get("productRanking", [])[:5]
+    if top5:
+        top5_text = "\n".join(
+            f"  {p['rank']}位: {p['name']} ({p['quantity']}個・¥{p['sales']:,}・構成比{p['sharePct']}%)"
+            for p in top5
+        )
+    else:
+        top5_text = "  （販売実績なし）"
+
+    sales_months = sum(1 for m in monthly if m["sales"] > 0)
+    peak = max(monthly, key=lambda m: m["sales"], default=None)
+    peak_text = (
+        f"{peak['monthLabel']}（¥{peak['sales']:,}）"
+        if peak and peak["sales"] > 0 else "突出した月なし"
+    )
+
+    return (
+        "あなたは森田醤油醸造元（家業の醤油蔵）のEC売上を年次で振り返るアナリストです。\n"
+        "以下のデータをもとに、家業オーナー向けの年度総括コメントを書いてください。\n\n"
+        f"【年度】{payload.get('fiscalLabel', '')}（{payload.get('period', {}).get('start', '')}〜{payload.get('period', {}).get('end', '')}）\n"
+        f"【年間売上総額】¥{total_sales:,}\n"
+        f"【年間注文件数】{order_count}件\n"
+        f"【平均単価】¥{avg:,}\n"
+        f"【前年同期比】{yoy_text}\n"
+        f"【売上があった月数】{sales_months}/12ヶ月\n"
+        f"【ピーク月】{peak_text}\n"
+        f"【月別売上推移】\n{monthly_text}\n"
+        f"【商品ランキングTOP5（年間）】\n{top5_text}\n\n"
+        "## 出力ルール\n"
+        "- 文字数: 400字 ±50字（必ず守る）\n"
+        "- 構成: 以下の4部を順に書く（小見出しは付けず、自然な文章に繋げる）\n"
+        "  1. 年度の総括 約100字 — 年間売上・件数・前年比・トップ商品\n"
+        "  2. 季節トレンド・伸びた商品 約80字 — 月別推移から見える季節性、好調カテゴリ\n"
+        "  3. 積み残し・課題 約80字 — 年度通して伸び悩んだ点、改善余地、構造的な課題\n"
+        "  4. 来年度の方向性 約140字 — 重点施策、新商品検討、季節別キャンペーンの全体設計（具体施策2〜3個）\n"
+        "- トーン: 穏やかだが前向き、年度全体を俯瞰した「経営者目線」の語り口\n"
+        "- 過度に楽観/悲観な表現や、根拠のない予測は避ける\n"
+        "- 売上が少ない初年度でも、励ましつつ建設的な提案を入れる\n"
+    )
+
+
+def _call_models_api(prompt: str, max_tokens: int) -> str:
+    """GitHub Models API を共通の形で呼ぶ。"""
     token = os.getenv("GITHUB_TOKEN", "").strip()
     if not token:
         raise RuntimeError(
@@ -89,7 +144,6 @@ def generate_comment(payload: dict) -> str:
             "  - GitHub Actions では secrets.GITHUB_TOKEN が自動付与されます\n"
             "  - ローカル実行時は models:read 権限を持つ Personal Access Token を export してください"
         )
-
     response = requests.post(
         MODELS_API_URL,
         headers={
@@ -98,26 +152,32 @@ def generate_comment(payload: dict) -> str:
         },
         json={
             "model": MODEL_ID,
-            "messages": [
-                {"role": "user", "content": build_prompt(payload)},
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
-            "max_tokens": 800,
+            "max_tokens": max_tokens,
         },
         timeout=REQUEST_TIMEOUT_SEC,
     )
-
     if response.status_code != 200:
         raise RuntimeError(
             f"GitHub Models API エラー: HTTP {response.status_code}\n"
             f"レスポンス: {response.text[:500]}"
         )
-
     data = response.json()
     try:
         return data["choices"][0]["message"]["content"].strip()
     except (KeyError, IndexError) as e:
         raise RuntimeError(f"レスポンス形式が想定外です: {data}") from e
+
+
+def generate_comment(payload: dict) -> str:
+    """月次AIコメントを生成して返す。"""
+    return _call_models_api(build_prompt(payload), max_tokens=800)
+
+
+def generate_fiscal_comment(payload: dict) -> str:
+    """年次（年度）AIコメントを生成して返す。"""
+    return _call_models_api(build_fiscal_prompt(payload), max_tokens=1000)
 
 
 def main() -> int:
@@ -126,6 +186,11 @@ def main() -> int:
         "--input",
         default="data/latest.json",
         help="入力JSONファイル（デフォルト: data/latest.json）",
+    )
+    parser.add_argument(
+        "--fiscal",
+        action="store_true",
+        help="年次（年度）コメントを生成する。--input に fiscal-YYYY.json を指定。",
     )
     args = parser.parse_args()
 
@@ -136,7 +201,9 @@ def main() -> int:
 
     payload = json.loads(input_path.read_text(encoding="utf-8"))
     try:
-        comment = generate_comment(payload)
+        comment = (
+            generate_fiscal_comment(payload) if args.fiscal else generate_comment(payload)
+        )
     except Exception as e:
         print(f"失敗: {e}")
         return 1

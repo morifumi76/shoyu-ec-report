@@ -32,10 +32,19 @@ LATEST_PATH = PROJECT_ROOT / "data" / "latest.json"
 MONTHS_INDEX_PATH = PROJECT_ROOT / "data" / "months.json"
 
 # Y軸スケール自動計算の切り上げ単位（設計書 §4）
-LEFT_AXIS_UNIT = 5000      # 日別売上（円）
-RIGHT_AXIS_UNIT = 50000    # 累積売上（円）
+LEFT_AXIS_UNIT = 5000      # 月次：日別売上（円）
+RIGHT_AXIS_UNIT = 50000    # 月次：累積売上（円）
 LEFT_AXIS_MIN = 5000
 RIGHT_AXIS_MIN = 50000
+
+# 年次グラフ用（月別）
+FISCAL_LEFT_AXIS_UNIT = 50000     # 年次：月別売上
+FISCAL_RIGHT_AXIS_UNIT = 500000   # 年次：年累積売上
+FISCAL_LEFT_AXIS_MIN = 50000
+FISCAL_RIGHT_AXIS_MIN = 500000
+
+# 会計年度の開始月（4月始まり）
+FISCAL_START_MONTH = 4
 
 
 def parse_args() -> argparse.Namespace:
@@ -240,26 +249,156 @@ def write_json(path: Path, payload: dict) -> None:
     )
 
 
+def determine_fiscal_year(target_month: str) -> int:
+    """対象月から所属する会計年度（4月始まり）を求める。
+
+    例: 2026-04 → 2026年度、2027-03 → 2026年度、2027-04 → 2027年度
+    """
+    year, month = map(int, target_month.split("-"))
+    return year if month >= FISCAL_START_MONTH else year - 1
+
+
+def fiscal_year_months(fiscal_year: int) -> list[str]:
+    """その会計年度に含まれる12ヶ月の YYYY-MM を 4月始まり順で返す。"""
+    result: list[str] = []
+    for offset in range(12):
+        m = FISCAL_START_MONTH + offset
+        if m <= 12:
+            result.append(f"{fiscal_year:04d}-{m:02d}")
+        else:
+            result.append(f"{fiscal_year + 1:04d}-{m - 12:02d}")
+    return result
+
+
+def aggregate_fiscal(fiscal_year: int) -> dict:
+    """会計年度（4月〜翌3月）のアーカイブを月次archive群から組み立てる。
+
+    存在する月だけ取り込み、無い月は売上0として扱う。
+    """
+    months_in_fy = fiscal_year_months(fiscal_year)
+    monthly_archives: dict[str, dict] = {}
+    for ym in months_in_fy:
+        path = ARCHIVE_DIR / f"{ym}.json"
+        if path.exists():
+            monthly_archives[ym] = json.loads(path.read_text(encoding="utf-8"))
+
+    # 月別売上配列（12ヶ月固定）
+    monthly_sales: list[dict] = []
+    for ym in months_in_fy:
+        m = int(ym.split("-")[1])
+        sales = monthly_archives.get(ym, {}).get("summary", {}).get("totalSales", 0)
+        monthly_sales.append({
+            "month": ym,
+            "monthLabel": f"{m}月",
+            "sales": sales,
+        })
+
+    # サマリ
+    total_sales = sum(a.get("summary", {}).get("totalSales", 0) for a in monthly_archives.values())
+    order_count = sum(a.get("summary", {}).get("orderCount", 0) for a in monthly_archives.values())
+    avg = round(total_sales / order_count) if order_count else 0
+
+    # 前年同期比（前年度のfiscalアーカイブが既にあれば計算）
+    yoy_pct = None
+    prev_fiscal_path = ARCHIVE_DIR / f"fiscal-{fiscal_year - 1}.json"
+    if prev_fiscal_path.exists():
+        prev_total = json.loads(prev_fiscal_path.read_text(encoding="utf-8")).get(
+            "summary", {}
+        ).get("totalSales", 0)
+        if prev_total:
+            yoy_pct = round((total_sales - prev_total) / prev_total * 100, 1)
+
+    # 商品ランキング：12ヶ月の月次productRankingを商品名でマージ
+    product_map: dict[str, dict] = {}
+    for arc in monthly_archives.values():
+        for p in arc.get("productRanking", []):
+            name = p["name"]
+            if name not in product_map:
+                product_map[name] = {"quantity": 0, "sales": 0}
+            product_map[name]["quantity"] += int(p.get("quantity", 0))
+            product_map[name]["sales"] += int(p.get("sales", 0))
+
+    sorted_products = sorted(product_map.items(), key=lambda kv: kv[1]["sales"], reverse=True)
+    product_ranking: list[dict] = []
+    for rank, (name, data) in enumerate(sorted_products, start=1):
+        share = round(data["sales"] / total_sales * 100, 1) if total_sales else 0.0
+        product_ranking.append({
+            "rank": rank,
+            "name": name,
+            "quantity": data["quantity"],
+            "sales": data["sales"],
+            "sharePct": share,
+        })
+
+    # チャートスケール
+    max_monthly = max((m["sales"] for m in monthly_sales), default=0)
+    left_max = max(
+        FISCAL_LEFT_AXIS_MIN,
+        math.ceil(max_monthly * 1.2 / FISCAL_LEFT_AXIS_UNIT) * FISCAL_LEFT_AXIS_UNIT,
+    )
+    right_max = max(
+        FISCAL_RIGHT_AXIS_MIN,
+        math.ceil(total_sales * 1.1 / FISCAL_RIGHT_AXIS_UNIT) * FISCAL_RIGHT_AXIS_UNIT,
+    )
+
+    return {
+        "fiscalYear": fiscal_year,
+        "fiscalLabel": f"{fiscal_year}年度",
+        "period": {
+            "start": months_in_fy[0],
+            "end": months_in_fy[-1],
+        },
+        "generatedAt": datetime.now(JST).date().isoformat(),
+        "summary": {
+            "totalSales": total_sales,
+            "orderCount": order_count,
+            "averageOrderValue": avg,
+            "yearOverYearPct": yoy_pct,
+        },
+        "monthlySales": monthly_sales,
+        "chartScale": {"leftMax": left_max, "rightMax": right_max},
+        "productRanking": product_ranking,
+        "aiComment": "",
+    }
+
+
+def rebuild_fiscal_archive(fiscal_year: int) -> Path:
+    """fiscal-YYYY.json を再構築する。"""
+    payload = aggregate_fiscal(fiscal_year)
+    path = ARCHIVE_DIR / f"fiscal-{fiscal_year}.json"
+    write_json(path, payload)
+    return path
+
+
 def rebuild_months_index() -> dict:
     """data/archive/ をスキャンして data/months.json を作り直す。
 
-    index.html の月プルダウン用。
+    index.html の月プルダウン＋年度プルダウン用。
     GitHub Pages（静的サイト）ではディレクトリ列挙ができないため、
-    利用可能な月の一覧を別ファイルとして公開する必要がある。
+    利用可能な月＋年度の一覧を別ファイルとして公開する必要がある。
     """
     months: list[str] = []
+    fiscals: list[int] = []
     for f in ARCHIVE_DIR.glob("*.json"):
-        name = f.stem  # "2026-04"
-        # YYYY-MM 形式チェック
-        try:
-            datetime.strptime(name, "%Y-%m")
-            months.append(name)
-        except ValueError:
-            continue
-    months.sort()  # 昇順
+        name = f.stem
+        if name.startswith("fiscal-"):
+            try:
+                fiscals.append(int(name.removeprefix("fiscal-")))
+            except ValueError:
+                continue
+        else:
+            try:
+                datetime.strptime(name, "%Y-%m")
+                months.append(name)
+            except ValueError:
+                continue
+    months.sort()
+    fiscals.sort()
     payload = {
         "available": months,
         "latest": months[-1] if months else None,
+        "fiscalAvailable": fiscals,
+        "fiscalLatest": fiscals[-1] if fiscals else None,
     }
     write_json(MONTHS_INDEX_PATH, payload)
     return payload
@@ -327,7 +466,11 @@ def main() -> int:
     if not args.no_latest:
         write_json(LATEST_PATH, payload)
 
-    # months.json を再構築（index.htmlの月プルダウン用）
+    # 該当年度の fiscal アーカイブを再構築（年間タブ用）
+    fiscal_year = determine_fiscal_year(target_month)
+    fiscal_path = rebuild_fiscal_archive(fiscal_year)
+
+    # months.json を再構築（プルダウン用インデックス）
     months_index = rebuild_months_index()
 
     # サマリ表示
@@ -335,7 +478,11 @@ def main() -> int:
     print(f"  {archive_path}")
     if not args.no_latest:
         print(f"  {LATEST_PATH}")
-    print(f"  {MONTHS_INDEX_PATH} （利用可能な月: {len(months_index['available'])}件）")
+    print(f"  {fiscal_path} （{fiscal_year}年度集計）")
+    print(
+        f"  {MONTHS_INDEX_PATH} "
+        f"（月: {len(months_index['available'])}件 / 年度: {len(months_index['fiscalAvailable'])}件）"
+    )
     print(f"  売上合計: ¥{summary['totalSales']:,}")
     print(f"  注文件数: {summary['orderCount']}")
     print(f"  平均単価: ¥{summary['averageOrderValue']:,}")

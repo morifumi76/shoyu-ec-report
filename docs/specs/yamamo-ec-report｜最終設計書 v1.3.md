@@ -1,4 +1,4 @@
-# yamamo-ec-report｜最終設計書 v1.2
+# yamamo-ec-report｜最終設計書 v1.3
 
 ## 改訂履歴
 - v1.0 (2026-04-24) 初版。前提に「index.html は sample-data.json を読んで surge.sh で動作中」と記載。
@@ -9,6 +9,12 @@
   - §4 latest.json のキー構造を **暫定 → 確定**（index.html 表示項目から逆算して全フィールド定義）
   - §5 AIコメントを **200字 → 300字**、4部構成（振り返り／好調点／課題／来月提案）に拡張
   - §9 マイルストーン M2完了反映、M3を3aと3bに分割
+- v1.3 (2026-05-03)
+  - §4 に **年度（4月〜翌3月）累計ビュー**用の `fiscal-YYYY.json` 構造を追加
+  - §4 index.html に **月間/年間 タブUI**＋年度プルダウンを追加
+  - §4 年間ビュー専用の **売上比率チャート**（横棒スタック）を追加。注文詳細は年間ビューでは非表示
+  - §5 AIコメントに **年間版（年次振り返り・約400字）**を追加
+  - §9 マイルストーン M3〜M5 完了反映、M5b（年間タブ）を追加
 
 ## 1. システム概要
 森田醤油醸造元のBASE ECショップから売上データを**毎日蓄積**し、
@@ -63,6 +69,16 @@ yamamo-ec-report/
 - `index.html` を**軽微にリファクタ**し、`fetch('data/latest.json')` で外部JSONを読み込む方式へ変更（M5）。
 - `data/latest.json` のキー構造は本書の §4「latest.json 確定キー構造」に従う。
 - `sample-data.json` は `latest.json` と同一構造のダミーデータ（M3aで投入済）。
+
+### データファイル構成
+
+| ファイル | 内容 | 生成タイミング |
+|---|---|---|
+| `data/daily/YYYY-MM-DD.json` | 日次の生データ | fetch_daily.py（毎日） |
+| `data/archive/YYYY-MM.json` | 月次集計の確定データ | generate_monthly.py（月次） |
+| `data/archive/fiscal-YYYY.json` | 年度（4月〜翌3月）累計データ | generate_monthly.py（月次のついでに再生成） |
+| `data/latest.json` | 最新月次のスナップショット | generate_monthly.py（月次） |
+| `data/months.json` | 利用可能な月＋年度のインデックス | generate_monthly.py（月次） |
 
 ### latest.json 確定キー構造
 
@@ -124,10 +140,82 @@ yamamo-ec-report/
 }
 ```
 
-### Y軸スケール自動計算ルール
+### Y軸スケール自動計算ルール（月次）
 - `leftMax` = `ceil(max(dailySales) * 1.2 / 5000) * 5000`（例: 最大18,200 → 25,000）
 - `rightMax` = `ceil(totalSales * 1.1 / 50000) * 50000`（例: 287,400 → 350,000）
 - 切り上げ単位（5,000 / 50,000）は将来必要に応じて見直す。
+
+### fiscal-YYYY.json 確定キー構造（年度ビュー）
+
+```jsonc
+{
+  "fiscalYear": 2026,                     // 年度（=4月始まりの年）
+  "fiscalLabel": "2026年度",              // 表示用
+  "period": {
+    "start": "2026-04",
+    "end":   "2027-03"
+  },
+  "generatedAt": "2026-05-03",
+
+  "summary": {
+    "totalSales": 35600,                  // 年間売上合計
+    "orderCount": 9,                      // 年間注文件数
+    "averageOrderValue": 3956,            // 平均単価
+    "yearOverYearPct": null               // 前年同期比%（前年度のfiscalアーカイブが無ければnull）
+  },
+
+  // 月別売上（4月〜翌3月の12ヶ月固定）
+  "monthlySales": [
+    { "month": "2026-04", "monthLabel": "4月",  "sales": 35600 },
+    { "month": "2026-05", "monthLabel": "5月",  "sales": 0 }
+    // ... 12件
+  ],
+
+  "chartScale": {
+    "leftMax":  50000,                    // ceil(max(monthlySales)*1.2/50000)*50000
+    "rightMax": 500000                    // ceil(totalSales*1.1/500000)*500000
+  },
+
+  // 商品ランキング：12ヶ月分の月次productRankingを商品名でマージ
+  "productRanking": [
+    { "rank": 1, "name": "...", "quantity": 10, "sales": 9400, "sharePct": 26.4 }
+    // ... 全件
+  ],
+
+  "aiComment": ""                         // 年間版AIコメント（§5参照）
+}
+```
+
+### Y軸スケール自動計算ルール（年次）
+- `leftMax` = `ceil(max(monthlySales) * 1.2 / 50000) * 50000`
+- `rightMax` = `ceil(totalSales * 1.1 / 500000) * 500000`
+
+### index.html のタブUI仕様（v1.3で追加）
+
+ヘッダー直下に **月間 / 年間** のタブ切り替えを配置：
+- 月間タブ → 右上に **月プルダウン**、`data/archive/YYYY-MM.json` を fetch
+- 年間タブ → 右上に **年度プルダウン**、`data/archive/fiscal-YYYY.json` を fetch
+
+年間ビューの構成（月間ビューとの差分）：
+| セクション | 月間 | 年間 |
+|---|---|---|
+| サマリ4枚 | 月間売上・件数・平均・前月比 | 年間売上・件数・平均・前年同期比 |
+| 棒グラフ | 日別31本＋日次累積 | 月別12本＋月次累積 |
+| 商品ランキング | 月内全件 | 年度内全件 |
+| **売上比率チャート** | なし | **横棒スタック（全商品）** |
+| 注文詳細10件 | 表示 | **非表示** |
+| AIコメント | 月次振り返り | **年次振り返り** |
+
+### months.json 構造
+
+```jsonc
+{
+  "available": ["2026-04"],               // YYYY-MM の昇順
+  "latest":    "2026-04",
+  "fiscalAvailable": [2026],              // 年度の昇順
+  "fiscalLatest":    2026
+}
+```
 
 ## 5. AI分析コメント生成方式
 
@@ -142,7 +230,7 @@ yamamo-ec-report/
 
 → **案①（GitHub Models）を推奨**（運用コスト抑制）。
 
-### コメントの立て付け（v1.2で確定）
+### 月次コメントの立て付け（v1.2で確定）
 - **文字数**: 300字 ±50字
 - **構成**: 4部構成
   1. **今月の振り返り**（80字程度）— 売上総額・注文件数・前月比・トップ商品など事実ベース
@@ -152,6 +240,16 @@ yamamo-ec-report/
 - **トーン**: 穏やかだが前向き、家業への敬意を感じさせる
 - **必ず含める要素**: 売上総額、前月比、トップ3商品、来月の具体施策1〜2個
 - **避ける表現**: 過度に楽観/悲観な言い回し、根拠のない予測
+
+### 年次コメントの立て付け（v1.3で追加）
+- **文字数**: 400字 ±50字
+- **構成**: 4部構成
+  1. **年度の総括**（100字程度）— 年間売上・注文件数・前年比・トップ商品の年間ベース実績
+  2. **季節トレンド・伸びた商品**（80字程度）— 月別推移から見える季節性、好調商品カテゴリの分析
+  3. **積み残し・課題**（80字程度）— 年度通して伸び悩んだ点、改善余地、構造的な課題
+  4. **来年度の方向性**（140字程度）— 来年度の重点施策、新商品検討、季節別キャンペーンの全体設計
+- **トーン**: 月次同様。年度全体を俯瞰した「経営者目線」の語り口で
+- **必ず含める要素**: 年間売上、前年比（あれば）、トップ3商品、来年度の重点施策2〜3個
 
 ### プロンプト骨子
 ```
@@ -204,10 +302,10 @@ yamamo-ec-report/
 - M0: ✅ starter/ 整理、設計書v1.1化、README・CLAUDE.md整備
 - M1: ✅ BASE開発者アプリ登録（手動・ユーザー作業）
 - M2: ✅ oauth_init.py 実装・ローカル認証
-- M3: 🚧 M3a + M3b に分割
-  - M3a: 設計書v1.2 + sample-data.json ダミー投入（**本PR**）
-  - M3b: fetch_daily.py 実装（次PR）
-- M4: generate_monthly.py + ai_comment.py 実装
-- M5: index.html の軽微リファクタ（fetch('data/latest.json') 化）
+- M3a: ✅ 設計書v1.2 + sample-data.json ダミー投入
+- M3b: ✅ fetch_daily.py 実装
+- M4: ✅ generate_monthly.py + ai_comment.py 実装
+- M5: ✅ index.html を fetch化＋月プルダウン追加
+- M5b: 🚧 月間/年間タブ追加＋fiscal-YYYY.json 集計＋年度プルダウン＋売上比率チャート（**本PR**）
 - M6: GitHub Actions 両ワークフロー設定（毎日09:00 / 毎月1日10:00 JST）
 - M7: 本番検証（手動トリガー → 翌月1日自動実行確認）
