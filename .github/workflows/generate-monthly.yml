@@ -1,0 +1,69 @@
+name: Monthly Report Generation
+
+# 毎月 1日 10:00 JST に前月分の月次レポートを集計し、
+# AIコメント込みで data/latest.json / data/archive/YYYY-MM.json /
+# data/archive/fiscal-YYYY.json / data/months.json を更新してコミットする。
+# UTC 1:00 = JST 10:00（cron: '0 1 1 * *'）。
+# 設計書 v1.3 §2 / §5 / §9 M6 に準拠。
+
+on:
+  schedule:
+    - cron: '0 1 1 * *'    # 毎月1日 10:00 JST
+  workflow_dispatch:
+    inputs:
+      month:
+        description: '対象月 YYYY-MM（省略時は前月）'
+        required: false
+        type: string
+
+permissions:
+  contents: write           # data/* への push
+  models: read              # GitHub Models（AIコメント生成）
+
+concurrency:
+  group: generate-monthly
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate monthly report (with AI comment)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_MONTH: ${{ inputs.month }}
+        run: |
+          ARGS="--with-ai --force"
+          if [ -n "$INPUT_MONTH" ]; then
+            ARGS="--month $INPUT_MONTH $ARGS"
+          fi
+          echo "Running: python scripts/generate_monthly.py $ARGS"
+          python scripts/generate_monthly.py $ARGS
+
+      - name: Commit and push if data changed
+        run: |
+          if [ -n "$(git status --porcelain data/)" ]; then
+            git config user.name  'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add data/latest.json data/archive/ data/months.json
+            MONTH_LABEL="${{ inputs.month }}"
+            if [ -z "$MONTH_LABEL" ]; then
+              MONTH_LABEL=$(TZ=Asia/Tokyo date -d '1 month ago' +%Y-%m)
+            fi
+            git commit -m "data: 月次レポート自動生成 (${MONTH_LABEL})"
+            git push
+          else
+            echo "::notice::データに変更なし、コミットをスキップします"
+          fi
