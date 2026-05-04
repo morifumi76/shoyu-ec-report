@@ -118,6 +118,11 @@
 </head>
 <body class="bg-cream-100 text-brown-900 min-h-screen">
 
+  <!-- デモバナー（months.json の isDemo:true のときだけ表示。本番は非表示） -->
+  <div id="demoBanner" class="hidden bg-yellow-300 text-brown-900 text-center py-2 px-4 text-sm font-bold border-b-2 border-yellow-500">
+    🔍 これはデモページです — 表示中の数値はすべて<u>架空のサンプルデータ</u>です（実際の売上ではありません）
+  </div>
+
   <!-- ヘッダー -->
   <header class="bg-brown-900 text-white shadow-md">
     <div class="max-w-5xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-y-2">
@@ -704,6 +709,10 @@
       } catch (e) {
         showError(e.message);
         return;
+      }
+      // months.json に isDemo:true がある場合だけデモバナーを表示
+      if (monthsIndex.isDemo) {
+        document.getElementById('demoBanner').classList.remove('hidden');
       }
       // タブクリック
       document.getElementById('tabMonthly').addEventListener('click', () => setMode('monthly'));
