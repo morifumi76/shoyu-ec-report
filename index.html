@@ -184,6 +184,11 @@
       </div>
     </section>
 
+    <!-- スパースデータ通知（年間ビューで¥0の月が含まれるときだけ表示） -->
+    <div id="sparseNotice" class="hidden bg-cream-200 border border-brown-200 rounded-lg p-3 text-xs text-brown-700">
+      <span class="font-bold">📅 運用開始：</span><span id="sparseNoticeBody">—</span>
+    </div>
+
     <!-- 売上推移グラフ -->
     <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
       <h2 class="text-sm font-bold text-brown-700 mb-3" id="chartTitle">売上推移</h2>
@@ -198,7 +203,8 @@
         </div>
       </div>
       <div class="overflow-x-auto" aria-label="売上推移グラフ">
-        <div style="display:flex; gap:2px; align-items:flex-start; min-width:700px;">
+        <!-- min-width はPC（≥768px）のみ。スマホでは横スクロール強制を解除し、棒が細くなっても画面内に収める -->
+        <div class="md:min-w-[700px]" style="display:flex; gap:2px; align-items:flex-start;">
           <div style="width:14px; height:180px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
             <span style="display:inline-block; transform:rotate(-90deg); white-space:nowrap; font-size:10px; color:#8D6E63;" id="chartLeftAxisCaption">売上（円）</span>
           </div>
@@ -685,6 +691,7 @@
       // セクション表示制御
       hide(document.getElementById('salesShareSection'));
       show(document.getElementById('recentOrdersSection'));
+      hide(document.getElementById('sparseNotice'));  // 月間ビューでは出さない
     }
 
     function renderFiscalView(data) {
@@ -703,6 +710,27 @@
       // セクション表示制御
       show(document.getElementById('salesShareSection'));
       hide(document.getElementById('recentOrdersSection'));
+
+      // スパースデータ通知（記録月数が12未満なら「運用開始」を明示）
+      renderSparseNotice(data);
+    }
+
+    function renderSparseNotice(data) {
+      const notice = document.getElementById('sparseNotice');
+      const body   = document.getElementById('sparseNoticeBody');
+      const monthly = data.monthlySales || [];
+      const populated = monthly.filter(m => m.sales > 0);
+      if (populated.length === 0 || populated.length >= monthly.length) {
+        hide(notice);
+        return;
+      }
+      const first = populated[0];
+      const last  = populated[populated.length - 1];
+      const range = first === last
+        ? `${first.monthLabel}のみ記録あり`
+        : `${first.monthLabel}〜${last.monthLabel}に記録あり`;
+      body.textContent = `${first.monthLabel}から運用開始 ・ ${populated.length}/${monthly.length}ヶ月の集計（${range}・他は¥0として扱われます）`;
+      show(notice);
     }
 
     // ----- プルダウン＋タブ制御 -----------------------------------------

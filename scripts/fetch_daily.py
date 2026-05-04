@@ -115,19 +115,27 @@ def normalize_order(order: dict) -> dict:
     }
 
 
-def build_daily_payload(target: date, detailed_orders: list[dict]) -> dict:
+def build_daily_payload(
+    target: date,
+    detailed_orders: list[dict],
+    errors: list[dict] | None = None,
+) -> dict:
     """daily JSON のペイロードを組み立てる。
 
     detailed_orders は normalize_order() 済の注文リスト。
+    errors があれば payload にも残し、後続の集計から「事故月」を識別できるようにする。
     """
     total_sales = sum(o["totalAmount"] for o in detailed_orders)
-    return {
+    payload = {
         "date": target.isoformat(),
         "fetchedAt": datetime.now(JST).isoformat(timespec="seconds"),
         "orderCount": len(detailed_orders),
         "totalSales": total_sales,
         "orders": detailed_orders,
     }
+    if errors:
+        payload["errors"] = errors
+    return payload
 
 
 def save_daily(payload: dict, target: date, force: bool) -> Path:
@@ -196,24 +204,31 @@ def main() -> int:
     print(f"  → {len(order_summaries)} 件")
 
     # 各注文の詳細（商品明細・配送先）を取得して整形
+    # 失敗を握りつぶすと「見かけ正常」になり後で気付けないため、エラーは payload に記録し
+    # 失敗率が許容ライン（20%）を超えたらジョブを失敗扱いにする
     detailed: list[dict] = []
+    errors: list[dict] = []
     if order_summaries:
         print("\n各注文の詳細を取得中...")
         for i, summary in enumerate(order_summaries, 1):
             unique_key = summary.get("unique_key")
             if not unique_key:
-                print(f"  [{i}/{len(order_summaries)}] unique_key が無いためスキップ")
+                msg = "unique_key 欠落"
+                print(f"  [{i}/{len(order_summaries)}] {msg}")
+                errors.append({"index": i, "uniqueKey": None, "reason": msg})
                 continue
             try:
                 detail_resp = fetch_order_detail(access_token, unique_key)
             except BaseApiError as e:
-                print(f"  [{i}/{len(order_summaries)}] 詳細取得失敗 ({unique_key}): {e}")
+                msg = str(e)[:300]
+                print(f"  [{i}/{len(order_summaries)}] 詳細取得失敗 ({unique_key}): {msg}")
+                errors.append({"index": i, "uniqueKey": unique_key, "reason": msg})
                 continue
             order_obj = detail_resp.get("order", {})
             detailed.append(normalize_order(order_obj))
             print(f"  [{i}/{len(order_summaries)}] {unique_key} ¥{order_obj.get('total', 0):,}")
 
-    payload = build_daily_payload(target, detailed)
+    payload = build_daily_payload(target, detailed, errors=errors)
 
     if args.dry_run:
         print("\n[dry-run] 以下を保存せず表示のみ:\n")
@@ -229,6 +244,15 @@ def main() -> int:
     print(f"\n保存しました: {out_path}")
     print(f"  注文件数: {payload['orderCount']}")
     print(f"  売上合計: ¥{payload['totalSales']:,}")
+
+    # 詳細取得の失敗率が高いとデータ整合性が取れないので、保存はしつつジョブを失敗扱いにする
+    if errors and order_summaries:
+        rate = len(errors) / len(order_summaries)
+        print(f"  詳細取得エラー: {len(errors)}/{len(order_summaries)} 件 ({rate*100:.0f}%)")
+        if rate >= 0.20:
+            print("\n[警告] エラー率が許容ライン(20%)を超えたため exit code 2 を返します。")
+            print("       payload は保存済（errors[] に記録）。Actions側で再実行を判断してください。")
+            return 2
     return 0
 
 
