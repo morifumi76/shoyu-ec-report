@@ -50,23 +50,32 @@ jobs:
 
       # BASE は refresh_token をローテーションするため、毎回返ってくる新トークンを
       # GitHub Secrets に書き戻して次回実行が成功するようにする。
-      # REPO_PAT が未設定の場合はスキップ（warning出力）。
+      # 書き戻しに失敗したら次回実行が確実に失敗するため、ジョブも赤くする（exit 1）。
       - name: Update BASE_REFRESH_TOKEN secret if rotated
         env:
           GH_TOKEN:  ${{ secrets.REPO_PAT }}
           OLD_TOKEN: ${{ secrets.BASE_REFRESH_TOKEN }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::REPO_PAT が未設定です。refresh_token のローテーションに追従できないため、次回実行が失敗する可能性があります。"
-            exit 0
+            echo "::error::REPO_PAT が未設定です。refresh_token のローテーションに追従できず、次回実行が失敗します。"
+            exit 1
           fi
           NEW=$(grep '^BASE_REFRESH_TOKEN=' .env | cut -d= -f2-)
-          if [ -n "$NEW" ] && [ "$NEW" != "$OLD_TOKEN" ]; then
-            echo "::notice::refresh_token がローテーションされました。Secret を更新します。"
-            echo -n "$NEW" | gh secret set BASE_REFRESH_TOKEN --body -
-          else
-            echo "refresh_token は変更なし"
+          if [ -z "$NEW" ]; then
+            echo "::error::.env から BASE_REFRESH_TOKEN を読めませんでした。"
+            exit 1
           fi
+          if [ "$NEW" = "$OLD_TOKEN" ]; then
+            echo "refresh_token は変更なし"
+            exit 0
+          fi
+          echo "::notice::refresh_token がローテーションされました。Secret を更新します。"
+          if ! echo -n "$NEW" | gh secret set BASE_REFRESH_TOKEN --body -; then
+            echo "::error::Secret 更新に失敗しました（gh secret set がエラー）。次回実行が確実に失敗するため、本ジョブも失敗扱いにします。"
+            echo "::error::REPO_PAT の権限（Secrets: Read and write）と有効期限を確認してください。"
+            exit 1
+          fi
+          echo "::notice::Secret 更新成功"
 
       - name: Remove .env (do not commit secrets)
         if: always()
