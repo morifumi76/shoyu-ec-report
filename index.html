@@ -225,7 +225,8 @@
     <!-- 商品別売上ランキング -->
     <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5">
       <h2 class="text-sm font-bold text-brown-700 mb-3">商品別売上ランキング</h2>
-      <div class="overflow-x-auto">
+      <!-- デスクトップ: テーブル表示 -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-sm">
           <caption class="sr-only">商品別売上ランキング</caption>
           <thead>
@@ -241,6 +242,8 @@
           <tbody id="productRankingBody" class="divide-y divide-brown-50"></tbody>
         </table>
       </div>
+      <!-- モバイル: カード表示（商品名が長くても綺麗に折り返す） -->
+      <div class="md:hidden divide-y divide-brown-50" id="productRankingCards"></div>
     </section>
 
     <!-- 売上比率（年間ビューのみ表示） -->
@@ -253,7 +256,8 @@
     <!-- 注文詳細一覧（月間ビューのみ表示） -->
     <section class="bg-white rounded-xl shadow-sm border border-brown-100 p-5" id="recentOrdersSection">
       <h2 class="text-sm font-bold text-brown-700 mb-3">注文詳細一覧（直近10件）</h2>
-      <div class="overflow-x-auto">
+      <!-- デスクトップ: テーブル表示 -->
+      <div class="hidden md:block overflow-x-auto">
         <table class="w-full text-sm">
           <caption class="sr-only">注文詳細一覧（直近10件）</caption>
           <thead>
@@ -269,6 +273,8 @@
           <tbody id="recentOrdersBody" class="divide-y divide-brown-50"></tbody>
         </table>
       </div>
+      <!-- モバイル: カード表示 -->
+      <div class="md:hidden divide-y divide-brown-50" id="recentOrdersCards"></div>
     </section>
 
     <!-- AIによる分析コメント -->
@@ -479,15 +485,51 @@
 
     function renderProductRanking(data) {
       const tbody = document.getElementById('productRankingBody');
-      clear(tbody);
+      const cards = document.getElementById('productRankingCards');
+      clear(tbody); clear(cards);
       const items = data.productRanking || [];
       const maxShare = items.length ? Math.max(...items.map(it => it.sharePct)) : 0;
 
       if (items.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-brown-400">データがありません</td></tr>';
+        cards.innerHTML = '<div class="px-3 py-6 text-center text-brown-400">データがありません</div>';
         return;
       }
 
+      // モバイル用カード描画
+      items.forEach(it => {
+        const widthPct = maxShare > 0 ? (it.sharePct / maxShare) * 100 : 0;
+        const barColor = BAR_COLOR[it.rank] || (it.rank <= 5 ? 'bg-brown-300' : 'bg-brown-200');
+        const shareClass = SHARE_TEXT[it.rank] || 'text-brown-700 font-medium';
+
+        let badgeHtml;
+        if (RANK_BADGE[it.rank]) {
+          const b = RANK_BADGE[it.rank];
+          badgeHtml = `<span class="inline-flex items-center justify-center w-6 h-6 rounded-full ${b.bg} ${b.text} text-xs ${b.weight}">${it.rank}</span>`;
+        } else {
+          badgeHtml = `<span class="inline-flex items-center justify-center w-6 h-6 text-brown-400 text-xs font-medium">${it.rank}</span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = 'flex gap-3 py-3 first:pt-0 last:pb-0';
+        card.innerHTML = `
+          <div class="shrink-0 pt-0.5">${badgeHtml}</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm ${it.rank <= 3 ? 'font-medium' : ''} text-brown-900" style="overflow-wrap:anywhere; word-break:normal;">${it.name}</p>
+            <p class="text-xs text-brown-500 mt-1.5">
+              <span class="text-brown-400">販売</span> <span class="font-medium text-brown-700">${it.quantity}</span>個 ・
+              <span class="font-medium text-brown-900">${fmtYen(it.sales)}</span> ・
+              <span class="text-brown-400">構成比</span> <span class="${shareClass}">${it.sharePct}%</span>
+            </p>
+            <div class="h-1.5 bg-brown-100 rounded mt-2 overflow-hidden">
+              <div class="h-1.5 ${barColor} rounded" style="width:${widthPct}%"></div>
+            </div>
+          </div>
+        `;
+        cards.appendChild(card);
+      });
+
+      // デスクトップ用テーブル描画（既存）
       items.forEach(it => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-cream-50';
@@ -566,14 +608,34 @@
 
     function renderRecentOrders(data) {
       const tbody = document.getElementById('recentOrdersBody');
-      clear(tbody);
+      const cards = document.getElementById('recentOrdersCards');
+      clear(tbody); clear(cards);
       const orders = data.recentOrders || [];
 
       if (orders.length === 0) {
         tbody.innerHTML = '<tr><td colspan="6" class="px-3 py-6 text-center text-brown-400">データがありません</td></tr>';
+        cards.innerHTML = '<div class="px-3 py-6 text-center text-brown-400">データがありません</div>';
         return;
       }
 
+      // モバイル用カード描画
+      orders.forEach(o => {
+        const card = document.createElement('div');
+        card.className = 'py-3 first:pt-0 last:pb-0';
+        card.innerHTML = `
+          <div class="flex justify-between items-baseline gap-2 mb-1">
+            <span class="text-xs text-brown-500">${o.date || ''}・${o.shippingArea || ''}</span>
+            <span class="text-sm font-bold text-brown-900">${fmtYen(o.amount)}</span>
+          </div>
+          <p class="text-sm text-brown-900" style="overflow-wrap:anywhere; word-break:normal;">${o.productName || ''}</p>
+          <p class="text-xs text-brown-400 mt-1">
+            数量 ${o.quantity ?? ''} ・ <span class="font-mono">${o.orderNumber || ''}</span>
+          </p>
+        `;
+        cards.appendChild(card);
+      });
+
+      // デスクトップ用テーブル描画（既存）
       orders.forEach(o => {
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-cream-50';
