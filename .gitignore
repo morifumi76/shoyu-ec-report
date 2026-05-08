@@ -40,3 +40,9 @@ build/
 
 # ログ
 *.log
+
+# Claude Code / Cursor のローカル設定
+.claude/
+
+# .env バックアップ（OAuth再認証前など）
+.env.bak.*
