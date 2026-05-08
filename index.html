@@ -160,9 +160,17 @@
 
   <main id="mainContent" class="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
+    <!-- 途中経過バナー（inProgress=trueのときだけ表示） -->
+    <div id="inProgressBanner" class="hidden bg-amber-100 border border-amber-300 rounded-lg p-3 text-xs text-brown-700">
+      <span class="font-bold text-amber-800">🚧 途中経過レポート：</span><span id="inProgressBannerBody">—</span>
+    </div>
+
     <!-- サマリカード（4枚） -->
     <section>
-      <h2 class="text-sm font-bold text-brown-500 mb-3" id="summarySectionTitle">月次サマリ</h2>
+      <h2 class="text-sm font-bold text-brown-500 mb-3 flex items-center gap-2" id="summarySectionTitleWrap">
+        <span id="summarySectionTitle">月次サマリ</span>
+        <span id="inProgressBadge" class="hidden inline-block px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-200 text-amber-800 border border-amber-300">途中経過</span>
+      </h2>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-xl shadow-sm border border-brown-100 p-4 pl-3" style="border-left: 4px solid #C62828;">
           <p class="text-xs text-brown-400 mb-1" id="cardTotalSalesLabel">月間売上合計</p>
@@ -417,7 +425,15 @@
       const compare = mode === 'fiscal' ? s.yearOverYearPct : s.monthOverMonthPct;
       const compareLabel = compare == null ? '—' : `${compare > 0 ? '+' : ''}${compare}%`;
       document.getElementById('cardMom').textContent = compareLabel;
-      document.getElementById('cardMomSub').textContent = (mode === 'fiscal' ? '前年同期比 ' : '前月比 ') + compareLabel;
+
+      // v1.4: 月途中（sameDayCount比較）のときは「前月比」ラベルを「同日数比較」に切替
+      let prefix = mode === 'fiscal' ? '前年同期比 ' : '前月比 ';
+      if (mode === 'monthly' && s.monthOverMonthBasis === 'sameDayCount') {
+        const n = data.daysCovered ?? '—';
+        prefix = `前月1〜${n}日比 `;
+        document.getElementById('cardMomLabel').textContent = `前月比（1〜${n}日）`;
+      }
+      document.getElementById('cardMomSub').textContent = prefix + compareLabel;
     }
 
     /**
@@ -666,9 +682,14 @@
         el.textContent = c;
         el.classList.remove('italic', 'opacity-70');
       } else {
-        el.textContent = mode === 'fiscal'
-          ? 'AI年間分析コメントは年次ジョブ後に生成されます。'
-          : 'AI分析コメントは月次ジョブ後に生成されます。';
+        // v1.4: inProgress=true の月途中レポートでは「月末締め後に生成」案内
+        if (mode === 'monthly' && data.inProgress) {
+          el.textContent = 'まだ月途中のため、AI分析コメントは月末締め後（毎月1日）に生成されます。';
+        } else {
+          el.textContent = mode === 'fiscal'
+            ? 'AI年間分析コメントは年次ジョブ後に生成されます。'
+            : 'AI分析コメントは月次ジョブ後に生成されます。';
+        }
         el.classList.add('italic', 'opacity-70');
       }
     }
@@ -681,8 +702,11 @@
       renderSummary(data, 'monthly');
 
       const items = (data.dailySales || []).map(d => ({ label: String(d.day), value: d.sales }));
+      const chartTitle = data.inProgress
+        ? `日別売上推移（${data.monthLabel || ''}・${data.daysCovered ?? '—'}日まで）`
+        : `日別売上推移（${data.monthLabel || ''}）`;
       renderChart(items, data.chartScale || { leftMax: 5000, rightMax: 50000 },
-                  `日別売上推移（${data.monthLabel || ''}）`, false);
+                  chartTitle, false);
 
       renderProductRanking(data);
       renderRecentOrders(data);
@@ -692,6 +716,20 @@
       hide(document.getElementById('salesShareSection'));
       show(document.getElementById('recentOrdersSection'));
       hide(document.getElementById('sparseNotice'));  // 月間ビューでは出さない
+
+      // v1.4: 途中経過バッジ＆バナー
+      const badge  = document.getElementById('inProgressBadge');
+      const banner = document.getElementById('inProgressBanner');
+      const body   = document.getElementById('inProgressBannerBody');
+      if (data.inProgress) {
+        show(badge);
+        const remain = (data.daysInMonth ?? 0) - (data.daysCovered ?? 0);
+        body.textContent = `${data.monthLabel || ''}は集計中です（${data.daysCovered ?? '—'}日まで反映、残り${remain}日）。前月比は同じ日数（前月1〜${data.daysCovered ?? '—'}日）と比較しています。AI分析コメントは月末締め後（翌月1日）に生成されます。`;
+        show(banner);
+      } else {
+        hide(badge);
+        hide(banner);
+      }
     }
 
     function renderFiscalView(data) {
@@ -710,6 +748,10 @@
       // セクション表示制御
       show(document.getElementById('salesShareSection'));
       hide(document.getElementById('recentOrdersSection'));
+
+      // 年間ビューでは月途中バッジ・バナーは出さない
+      hide(document.getElementById('inProgressBadge'));
+      hide(document.getElementById('inProgressBanner'));
 
       // スパースデータ通知（記録月数が12未満なら「運用開始」を明示）
       renderSparseNotice(data);
@@ -756,13 +798,15 @@
       } else {
         label.textContent = '対象月';
         const months = [...(monthsIndex.available || [])].reverse();
+        const inProgressMonth = monthsIndex.inProgressMonth;
         if (months.length === 0) {
           sel.appendChild(new Option('データなし', ''));
           sel.disabled = true;
           return null;
         }
         months.forEach(m => sel.appendChild(new Option(fmtMonthLabel(m), m)));
-        const def = monthsIndex.latest || months[0];
+        // デフォルトは途中経過があればそれを優先（最新月＝月途中で見たいケースが基本）
+        const def = inProgressMonth || monthsIndex.latest || months[0];
         sel.value = def;
         sel.disabled = false;
         return def;
