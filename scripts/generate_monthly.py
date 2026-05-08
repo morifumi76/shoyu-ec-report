@@ -1,15 +1,19 @@
 """
 月次集計スクリプト
 
-data/daily/YYYY-MM-*.json を集計し、設計書 v1.2 §4 の latest.json 構造に整形して
-data/latest.json と data/archive/YYYY-MM.json に書き出す。
+data/daily/YYYY-MM-*.json を集計し、設計書 v1.4 §4 の archive/YYYY-MM.json 構造に整形して
+data/archive/YYYY-MM.json と（必要なら）data/latest.json に書き出す。
 
 使い方:
-    python scripts/generate_monthly.py                        # 前月分（デフォルト）
+    python scripts/generate_monthly.py                        # 前月分（デフォルト・月締め用）
     python scripts/generate_monthly.py --month 2026-04
     python scripts/generate_monthly.py --month 2026-04 --with-ai      # AIコメント込み
     python scripts/generate_monthly.py --month 2026-04 --force        # archive上書き
     python scripts/generate_monthly.py --month 2026-04 --no-latest    # latest.json更新せず
+    python scripts/generate_monthly.py --month 2026-05 --force --no-ai  # 当月途中の集計
+
+当月（=今日と同じ月）を対象にした場合は inProgress=true として書き出す。
+inProgress=true のときは aiComment は空のままにする（AIコメントは月締め後のみ）。
 """
 
 from __future__ import annotations
@@ -70,6 +74,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="data/latest.json を更新しない（archiveのみ書き出し）。",
     )
+    parser.add_argument(
+        "--no-ai",
+        action="store_true",
+        help="--with-ai より優先で AIコメント生成をスキップ。当月の途中集計向け。",
+    )
     return parser.parse_args()
 
 
@@ -83,6 +92,27 @@ def determine_target_month(arg_month: str | None) -> str:
     first_of_this_month = today.replace(day=1)
     last_of_prev_month = first_of_this_month - timedelta(days=1)
     return last_of_prev_month.strftime("%Y-%m")
+
+
+def is_current_month(target_month: str) -> bool:
+    """target_month が JST の今月（=月途中）かどうか。"""
+    today = datetime.now(JST).date()
+    return target_month == f"{today.year:04d}-{today.month:02d}"
+
+
+def compute_days_covered(daily_data: list[dict]) -> int:
+    """daily_data 内の最大日付（1-31）を返す。空なら 0。
+
+    単純な len() ではなく max(day) を使うことで、間に欠損日があっても
+    「N日まで観測済」という意味で daysCovered を扱える。
+    """
+    days: list[int] = []
+    for d in daily_data:
+        try:
+            days.append(int(d["date"].split("-")[2]))
+        except (KeyError, ValueError, IndexError):
+            continue
+    return max(days, default=0)
 
 
 def load_daily_files(target_month: str) -> list[dict]:
@@ -99,34 +129,84 @@ def collect_all_orders(daily_data: list[dict]) -> list[dict]:
     return orders
 
 
-def compute_summary(orders: list[dict], target_month: str) -> dict:
-    """月次サマリ（4枚カード分）を算出する。"""
+def compute_summary(
+    orders: list[dict],
+    target_month: str,
+    in_progress: bool,
+    days_covered: int,
+) -> dict:
+    """月次サマリ（4枚カード分）を算出する。
+
+    in_progress=True のときは前月比を「同日数比較」（前月の1〜N日と比較）にする。
+    """
     total_sales = sum(o["totalAmount"] for o in orders)
     order_count = len(orders)
     average = round(total_sales / order_count) if order_count else 0
+    mom_pct, mom_basis = compute_mom_pct(target_month, total_sales, in_progress, days_covered)
     return {
         "totalSales": total_sales,
         "orderCount": order_count,
         "averageOrderValue": average,
-        "monthOverMonthPct": compute_mom_pct(target_month, total_sales),
+        "monthOverMonthPct": mom_pct,
+        "monthOverMonthBasis": mom_basis,
     }
 
 
-def compute_mom_pct(target_month: str, this_total: int) -> float | None:
-    """前月の archive と比較して前月比%を算出。前月データが無ければ None。"""
+def _prev_year_month(target_month: str) -> tuple[int, int]:
     year, month = map(int, target_month.split("-"))
     if month == 1:
-        prev_year, prev_month = year - 1, 12
-    else:
-        prev_year, prev_month = year, month - 1
+        return year - 1, 12
+    return year, month - 1
+
+
+def _sum_prev_month_first_n_days(target_month: str, n: int) -> int | None:
+    """前月の 1〜N日の totalSales を daily/*.json から合算する。
+
+    前月の N日分のうち1ファイルでも欠けていれば None を返す（不公平な比較を避ける）。
+    """
+    if n <= 0:
+        return None
+    prev_year, prev_month = _prev_year_month(target_month)
+    total = 0
+    for day in range(1, n + 1):
+        path = DAILY_DIR / f"{prev_year:04d}-{prev_month:02d}-{day:02d}.json"
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        total += int(data.get("totalSales", 0))
+    return total
+
+
+def compute_mom_pct(
+    target_month: str,
+    this_total: int,
+    in_progress: bool,
+    days_covered: int,
+) -> tuple[float | None, str | None]:
+    """前月比% と算出根拠（"full" / "sameDayCount" / None）を返す。
+
+    - in_progress=True: 前月1〜N日 vs 当月1〜N日で比較（sameDayCount）
+    - in_progress=False: 前月の archive と当月合計で比較（full）
+    - 前月データが無いか合計が0なら None / None
+    """
+    if in_progress:
+        prev_total = _sum_prev_month_first_n_days(target_month, days_covered)
+        if not prev_total:
+            return None, None
+        return round((this_total - prev_total) / prev_total * 100, 1), "sameDayCount"
+
+    prev_year, prev_month = _prev_year_month(target_month)
     prev_path = ARCHIVE_DIR / f"{prev_year:04d}-{prev_month:02d}.json"
     if not prev_path.exists():
-        return None
+        return None, None
     prev_data = json.loads(prev_path.read_text(encoding="utf-8"))
     prev_total = prev_data.get("summary", {}).get("totalSales", 0)
     if not prev_total:
-        return None
-    return round((this_total - prev_total) / prev_total * 100, 1)
+        return None, None
+    return round((this_total - prev_total) / prev_total * 100, 1), "full"
 
 
 def compute_daily_sales(daily_data: list[dict], target_month: str) -> list[dict]:
@@ -376,9 +456,12 @@ def rebuild_months_index() -> dict:
     index.html の月プルダウン＋年度プルダウン用。
     GitHub Pages（静的サイト）ではディレクトリ列挙ができないため、
     利用可能な月＋年度の一覧を別ファイルとして公開する必要がある。
+
+    v1.4: archive 内の inProgress=true な月を inProgressMonth として追記する。
     """
     months: list[str] = []
     fiscals: list[int] = []
+    in_progress_month: str | None = None
     for f in ARCHIVE_DIR.glob("*.json"):
         name = f.stem
         if name.startswith("fiscal-"):
@@ -389,14 +472,23 @@ def rebuild_months_index() -> dict:
         else:
             try:
                 datetime.strptime(name, "%Y-%m")
-                months.append(name)
             except ValueError:
+                continue
+            months.append(name)
+            try:
+                arc = json.loads(f.read_text(encoding="utf-8"))
+                if arc.get("inProgress") is True:
+                    # 同時に2つ inProgress があれば新しい方を採用
+                    if in_progress_month is None or name > in_progress_month:
+                        in_progress_month = name
+            except (json.JSONDecodeError, OSError):
                 continue
     months.sort()
     fiscals.sort()
     payload = {
         "available": months,
         "latest": months[-1] if months else None,
+        "inProgressMonth": in_progress_month,
         "fiscalAvailable": fiscals,
         "fiscalLatest": fiscals[-1] if fiscals else None,
     }
@@ -419,12 +511,17 @@ def main() -> int:
         print("  fetch_daily.py で日次データを取得してください。")
         return 1
 
-    print(f"対象月: {target_month}")
-    print(f"日次ファイル: {len(daily_data)} 件")
+    in_progress = is_current_month(target_month)
+    days_covered = compute_days_covered(daily_data)
+    year, month = map(int, target_month.split("-"))
+    days_in_month = calendar.monthrange(year, month)[1]
+
+    print(f"対象月: {target_month}{' (途中経過)' if in_progress else ''}")
+    print(f"日次ファイル: {len(daily_data)} 件 / daysCovered={days_covered} / daysInMonth={days_in_month}")
 
     # 集計
     orders = collect_all_orders(daily_data)
-    summary = compute_summary(orders, target_month)
+    summary = compute_summary(orders, target_month, in_progress, days_covered)
     daily_sales = compute_daily_sales(daily_data, target_month)
     chart_scale = compute_chart_scale(daily_sales, summary["totalSales"])
     product_ranking = compute_product_ranking(orders, summary["totalSales"])
@@ -434,6 +531,9 @@ def main() -> int:
         "month": target_month,
         "monthLabel": format_month_label(target_month),
         "generatedAt": datetime.now(JST).date().isoformat(),
+        "inProgress": in_progress,
+        "daysCovered": days_covered,
+        "daysInMonth": days_in_month,
         "summary": summary,
         "dailySales": daily_sales,
         "chartScale": chart_scale,
@@ -443,7 +543,8 @@ def main() -> int:
     }
 
     # AIコメント（任意）
-    if args.with_ai:
+    # v1.4: 月途中（inProgress=true）または --no-ai 指定時はスキップ
+    if args.with_ai and not args.no_ai and not in_progress:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from ai_comment import generate_comment  # noqa: E402
 
@@ -454,6 +555,10 @@ def main() -> int:
         except Exception as e:
             print(f"  → 失敗: {e}")
             print("  → aiComment は空のままにします")
+    elif args.with_ai and in_progress:
+        print("\n[skip] 月途中（inProgress=true）のため AIコメント生成をスキップします。")
+    elif args.with_ai and args.no_ai:
+        print("\n[skip] --no-ai 指定により AIコメント生成をスキップします。")
 
     # archive 書き出し（既存なら --force 必須）
     archive_path = ARCHIVE_DIR / f"{target_month}.json"
@@ -462,9 +567,13 @@ def main() -> int:
         return 1
     write_json(archive_path, payload)
 
-    # latest.json 書き出し（常に上書き、ただし --no-latest 指定時はスキップ）
-    if not args.no_latest:
+    # latest.json 書き出し
+    # v1.4: 月途中の archive は latest.json を上書きしない
+    #       （latest.json は「最新の確定月」のスナップショット。月途中は archive 経由で表示する）
+    if not args.no_latest and not in_progress:
         write_json(LATEST_PATH, payload)
+    elif in_progress and not args.no_latest:
+        print("\n[skip] 月途中のため latest.json は更新しません（archive のみ更新）。")
 
     # 該当年度の fiscal アーカイブを再構築（年間タブ用）
     fiscal_year = determine_fiscal_year(target_month)
@@ -475,19 +584,23 @@ def main() -> int:
 
     # サマリ表示
     print("\n保存しました:")
-    print(f"  {archive_path}")
-    if not args.no_latest:
+    print(f"  {archive_path}{' (inProgress=true)' if in_progress else ''}")
+    if not args.no_latest and not in_progress:
         print(f"  {LATEST_PATH}")
     print(f"  {fiscal_path} （{fiscal_year}年度集計）")
+    ipm = months_index.get("inProgressMonth")
+    ipm_part = f" / inProgressMonth={ipm}" if ipm else ""
     print(
         f"  {MONTHS_INDEX_PATH} "
-        f"（月: {len(months_index['available'])}件 / 年度: {len(months_index['fiscalAvailable'])}件）"
+        f"（月: {len(months_index['available'])}件 / 年度: {len(months_index['fiscalAvailable'])}件{ipm_part}）"
     )
     print(f"  売上合計: ¥{summary['totalSales']:,}")
     print(f"  注文件数: {summary['orderCount']}")
     print(f"  平均単価: ¥{summary['averageOrderValue']:,}")
     mom = summary["monthOverMonthPct"]
-    print(f"  前月比: {f'{mom}%' if mom is not None else '— (前月データなし)'}")
+    basis = summary["monthOverMonthBasis"]
+    basis_label = {"full": "前月フル", "sameDayCount": f"前月1〜{days_covered}日"}.get(basis, "—")
+    print(f"  前月比: {f'{mom}% ({basis_label})' if mom is not None else '— (前月データなし)'}")
     print(f"  商品ランキング: {len(product_ranking)} 種")
     print(f"  注文詳細: {len(recent_orders)} 件")
     return 0

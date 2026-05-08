@@ -1,8 +1,9 @@
 name: Daily Order Fetch
 
 # 毎日 09:00 JST に前日分の注文データを取得して data/daily/YYYY-MM-DD.json をコミットする。
+# 取得後、当月の archive/YYYY-MM.json を再生成して「月途中の途中経過レポート」を更新する（v1.4）。
 # UTC 基準 0:00 が JST 9:00 に相当（cron: '0 0 * * *'）。
-# 設計書 v1.3 §2 / §6 / §9 M6 に準拠。
+# 設計書 v1.4 §2 / §6 / §9 M8 に準拠。
 
 on:
   schedule:
@@ -81,13 +82,26 @@ jobs:
         if: always()
         run: rm -f .env
 
+      # v1.4: 日次取得後に当月の archive を再生成して「月途中レポート」を更新する。
+      # AIコメントは月締め後（generate-monthly ジョブ）でのみ生成するため、ここでは --no-ai。
+      # 月初（その月のdailyファイルがまだ無い）は空集計になりエラーするため、ファイル存在を先に確認する。
+      - name: Regenerate current month archive (in-progress)
+        run: |
+          CURRENT_MONTH=$(TZ=Asia/Tokyo date +%Y-%m)
+          if ls data/daily/${CURRENT_MONTH}-*.json >/dev/null 2>&1; then
+            echo "Regenerating archive for current month: $CURRENT_MONTH"
+            python scripts/generate_monthly.py --month "$CURRENT_MONTH" --no-ai --force
+          else
+            echo "::notice::data/daily/${CURRENT_MONTH}-*.json が無いため当月集計をスキップします"
+          fi
+
       - name: Commit and push if data changed
         run: |
-          if [ -n "$(git status --porcelain data/daily/)" ]; then
+          if [ -n "$(git status --porcelain data/)" ]; then
             git config user.name  'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add data/daily/
-            git commit -m "data: 日次データ自動取得 ($(TZ=Asia/Tokyo date -d '1 day ago' +%Y-%m-%d))"
+            git add data/daily/ data/archive/ data/months.json
+            git commit -m "data: 日次データ自動取得＋当月集計 ($(TZ=Asia/Tokyo date -d '1 day ago' +%Y-%m-%d))"
             git push
           else
             echo "::notice::データに変更なし、コミットをスキップします"

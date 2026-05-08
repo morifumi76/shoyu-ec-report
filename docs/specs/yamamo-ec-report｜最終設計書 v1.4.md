@@ -1,4 +1,4 @@
-# yamamo-ec-report｜最終設計書 v1.3
+# yamamo-ec-report｜最終設計書 v1.4
 
 ## 改訂履歴
 - v1.0 (2026-04-24) 初版。前提に「index.html は sample-data.json を読んで surge.sh で動作中」と記載。
@@ -15,6 +15,14 @@
   - §4 年間ビュー専用の **売上比率チャート**（横棒スタック）を追加。注文詳細は年間ビューでは非表示
   - §5 AIコメントに **年間版（年次振り返り・約400字）**を追加
   - §9 マイルストーン M3〜M5 完了反映、M5b（年間タブ）を追加
+- v1.4 (2026-05-09)
+  - §2 / §4 / §5 / §6 に **当月（in-progress）対応** を追加。
+    - 日次取得ジョブ末尾で当月の `archive/YYYY-MM.json` を再生成し、月途中でも本日までのデータでレポート閲覧可能に
+    - `archive/YYYY-MM.json` に `inProgress` / `daysCovered` / `daysInMonth` を追加
+    - 前月比は **同日数比較**（当月N日まで vs 前月1〜N日まで）に切り替え、`monthOverMonthBasis` で根拠を明示
+    - **AIコメントは月途中では生成しない**（月末締め後の `generate-monthly` ジョブのみ実行）
+    - `months.json` に `inProgressMonth` を追加。index.html 側はプルダウンに「（途中経過）」バッジ表示
+  - §9 マイルストーンに M8（当月対応）を追加
 
 ## 1. システム概要
 森田醤油醸造元のBASE ECショップから売上データを**毎日蓄積**し、
@@ -22,14 +30,18 @@
 
 ## 2. 2系統のワークフロー
 ─────────────────────────────────────
-[A] 毎日 09:00 JST  → データ取得ジョブ
+[A] 毎日 09:00 JST  → データ取得ジョブ（fetch-daily）
     BASE API → data/daily/YYYY-MM-DD.json に追記
-    （保険として毎日取得。API障害時も影響最小化）
+    ↓ （v1.4 で追加）
+    当月の generate_monthly.py --no-ai --force を続けて実行
+    → data/archive/YYYY-MM.json（inProgress=true）と data/months.json を更新
+    （これにより index.html で「当月の本日までの集計」が閲覧可能）
 
-[B] 毎月 1日 10:00 JST → 月次レポート生成ジョブ
+[B] 毎月 1日 10:00 JST → 月次レポート生成ジョブ（generate-monthly）
     前月分 daily/*.json を集計
     → data/latest.json に書き出し
-    → AI分析コメントをClaude API等で生成
+    → AI分析コメントを GitHub Models で生成（前月分のみ）
+    → 当月の archive を inProgress=false に確定
     → index.html がlatest.jsonを読んで描画
     → git commit & push（GitHub Pages自動デプロイ）
 ─────────────────────────────────────
@@ -89,12 +101,18 @@ yamamo-ec-report/
   "monthLabel": "2026年3月",              // 日本語表示用
   "generatedAt": "2026-04-01",            // 生成日（YYYY-MM-DD）
 
+  // 月途中の集計か（v1.4 追加）
+  "inProgress": false,                    // true=月途中、false=月締め確定
+  "daysCovered": 31,                      // 集計に含めた日数（=daily/*.json の数）
+  "daysInMonth":  31,                     // その月の総日数（calendar.monthrange）
+
   // 月次サマリ（4枚カードに対応）
   "summary": {
     "totalSales": 287400,                 // 月間売上合計（円）
     "orderCount": 43,                     // 注文件数
     "averageOrderValue": 6684,            // 平均単価（円、小数四捨五入）
-    "monthOverMonthPct": 12.3             // 前月比%（初月運用時は null → 画面で「—」表示）
+    "monthOverMonthPct": 12.3,            // 前月比%（v1.4: 同日数比較。null可）
+    "monthOverMonthBasis": "full"         // "full" | "sameDayCount" | null（v1.4 追加）
   },
 
   // 日別売上推移グラフ
@@ -144,6 +162,24 @@ yamamo-ec-report/
 - `leftMax` = `ceil(max(dailySales) * 1.2 / 5000) * 5000`（例: 最大18,200 → 25,000）
 - `rightMax` = `ceil(totalSales * 1.1 / 50000) * 50000`（例: 287,400 → 350,000）
 - 切り上げ単位（5,000 / 50,000）は将来必要に応じて見直す。
+- **当月（inProgress=true）の場合**：未到来の日（dailySales[].sales=0）も含むため、グラフ右側が空白になる。これは仕様。
+
+### 前月比の算出ルール（v1.4 確定）
+**月締め後（inProgress=false）**:
+- `monthOverMonthPct` = (当月totalSales − 前月totalSales) / 前月totalSales × 100
+- `monthOverMonthBasis` = `"full"`
+
+**月途中（inProgress=true）**:
+- `monthOverMonthPct` = (当月1〜N日のtotalSales − 前月1〜N日のtotalSales) / 前月1〜N日のtotalSales × 100
+- `monthOverMonthBasis` = `"sameDayCount"`
+- N = 当月の `daysCovered`（その時点までに集計された日数）
+- 前月分は `data/daily/YYYY-MM-DD.json` を直接読み、1〜N日のみを合算する（前月が完全に揃っていれば必ず計算可能）
+- 前月のデータが N日分揃っていなければ `null`
+
+**初月運用時など前月データが無い場合**:
+- `monthOverMonthPct` = `null`
+- `monthOverMonthBasis` = `null`
+- 画面では「—」表示
 
 ### fiscal-YYYY.json 確定キー構造（年度ビュー）
 
@@ -210,12 +246,16 @@ yamamo-ec-report/
 
 ```jsonc
 {
-  "available": ["2026-04"],               // YYYY-MM の昇順
-  "latest":    "2026-04",
+  "available": ["2026-04", "2026-05"],    // YYYY-MM の昇順（当月も含む）
+  "latest":    "2026-05",                 // = available の末尾
+  "inProgressMonth": "2026-05",           // 月途中で集計中の月（v1.4 追加・無ければ null）
   "fiscalAvailable": [2026],              // 年度の昇順
   "fiscalLatest":    2026
 }
 ```
+
+- `inProgressMonth` は「`archive/YYYY-MM.json` のうち `inProgress=true` のもの」を指す（基本的に当月）。
+- index.html はこの値を見てプルダウンに「（途中経過）」を付け、AIコメント欄を「月末締め後に生成」案内に切り替える。
 
 ## 5. AI分析コメント生成方式
 
@@ -229,6 +269,11 @@ yamamo-ec-report/
   - Claude 3.5 Haiku で月1回 → 約$0.01/回
 
 → **案①（GitHub Models）を推奨**（運用コスト抑制）。
+
+### AIコメントの生成タイミング（v1.4 確定）
+- **月途中（inProgress=true）では生成しない**。`aiComment` は空文字のまま archive/latest に書き出し、画面では「AI分析コメントは月末締め後に生成されます。」を表示。
+- 生成は **毎月1日 10:00 JST の `generate-monthly` ジョブのみ**（前月確定分に対して `--with-ai` で実行）。
+- 当月分の AI コメントが必要なケースが将来出てきた場合は、ジョブを別途追加する（v1.4 時点ではコスト・品質・整合性を優先してスキップ）。
 
 ### 月次コメントの立て付け（v1.2で確定）
 - **文字数**: 300字 ±50字
@@ -306,6 +351,7 @@ yamamo-ec-report/
 - M3b: ✅ fetch_daily.py 実装
 - M4: ✅ generate_monthly.py + ai_comment.py 実装
 - M5: ✅ index.html を fetch化＋月プルダウン追加
-- M5b: 🚧 月間/年間タブ追加＋fiscal-YYYY.json 集計＋年度プルダウン＋売上比率チャート（**本PR**）
-- M6: GitHub Actions 両ワークフロー設定（毎日09:00 / 毎月1日10:00 JST）
-- M7: 本番検証（手動トリガー → 翌月1日自動実行確認）
+- M5b: ✅ 月間/年間タブ追加＋fiscal-YYYY.json 集計＋年度プルダウン＋売上比率チャート
+- M6: ✅ GitHub Actions 両ワークフロー設定（毎日09:00 / 毎月1日10:00 JST）
+- M7: ✅ 本番運用開始（fetch-daily 自動実行、月次は5/3に手動で2026-04分を生成）
+- M8: 🚧 当月（in-progress）対応：fetch-daily 末尾に当月再集計、同日数前月比、AI途中スキップ、UI途中経過バッジ（**本PR**）
