@@ -6,10 +6,10 @@
   "daysCovered": 15,
   "daysInMonth": 31,
   "summary": {
-    "totalSales": 0,
-    "orderCount": 0,
-    "averageOrderValue": 0,
-    "monthOverMonthPct": -100.0,
+    "totalSales": 2050,
+    "orderCount": 1,
+    "averageOrderValue": 2050,
+    "monthOverMonthPct": -78.3,
     "monthOverMonthBasis": "sameDayCount"
   },
   "dailySales": [
@@ -63,7 +63,7 @@
     },
     {
       "day": 13,
-      "sales": 0
+      "sales": 2050
     },
     {
       "day": 14,
@@ -142,7 +142,24 @@
     "leftMax": 5000,
     "rightMax": 50000
   },
-  "productRanking": [],
-  "recentOrders": [],
+  "productRanking": [
+    {
+      "rank": 1,
+      "name": "混合醸造しょうゆ｜濃口醤油（紫：むらさき）｜ペットボトル 1.0ℓ",
+      "quantity": 2,
+      "sales": 1180,
+      "sharePct": 57.6
+    }
+  ],
+  "recentOrders": [
+    {
+      "date": "5/13",
+      "orderNumber": "D2390AD61EBB2C8F",
+      "productName": "混合醸造しょうゆ｜濃口醤油（紫：むらさき）｜ペットボトル 1.0ℓ",
+      "quantity": 2,
+      "amount": 2050,
+      "shippingArea": "兵庫県"
+    }
+  ],
   "aiComment": ""
 }
